@@ -1,0 +1,23 @@
+{
+  "name": "gemini-98-proxy-client",
+  "version": "1.0.0",
+  "description": "A Gemini-powered retro web chat interface for Windows 98 browsers.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@google/genai": "^1.8.0",
+    "dotenv": "^17.0.1",
+    "express": "^5.1.0"
+  },
+  "keywords": [
+    "gemini",
+    "windows98",
+    "retro",
+    "express",
+    "chatbot"
+  ],
+  "author": "",
+  "license": "MIT"
+}

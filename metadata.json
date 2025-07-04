@@ -1,0 +1,5 @@
+{
+  "name": "Gemini 98 Proxy Client",
+  "description": "A minimal, legacy-compatible web interface for a Gemini API proxy. Designed for IE6/Firefox 2 on Windows 98, this version uses pure ES3 JavaScript with polyfills and communicates with a user-provided backend proxy for API communication.",
+  "requestFramePermissions": []
+}

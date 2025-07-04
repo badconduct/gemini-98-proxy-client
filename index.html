@@ -1,0 +1,123 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+  <head>
+    <title>Gemini 98 Proxy</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+    <style type="text/css">
+      body {
+        background-color: #008080;
+        font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif;
+        font-size: 12px;
+        margin: 0;
+        padding: 20px;
+        text-align: center; /* The classic IE6 centering hack */
+      }
+      #container {
+        width: 600px;
+        margin: 0 auto;
+        border-top: 2px solid #FFFFFF;
+        border-left: 2px solid #FFFFFF;
+        border-right: 2px solid #000000;
+        border-bottom: 2px solid #000000;
+        background-color: #C0C0C0;
+        padding: 3px;
+        text-align: left; /* Reset text alignment for the container's content */
+      }
+      h1 {
+        background: #000080;
+        color: #FFFFFF;
+        font-size: 14px;
+        font-weight: bold;
+        padding: 4px 8px;
+        margin: 0;
+      }
+      #chatbox {
+        height: 400px;
+        overflow: auto; /* 'scroll' is fine, 'auto' is slightly better */
+        border-top: 2px solid #000000;
+        border-left: 2px solid #000000;
+        border-right: 2px solid #FFFFFF;
+        border-bottom: 2px solid #FFFFFF;
+        background-color: #FFFFFF;
+        padding: 10px;
+        word-wrap: break-word; /* IE 5.5+ */
+      }
+      .message {
+        margin-bottom: 8px;
+      }
+      .message-user {
+        color: #0000FF;
+        text-align: right;
+      }
+      .message-gemini {
+        color: #000000;
+      }
+      .message-error {
+        color: #FF0000;
+        font-weight: bold;
+      }
+      .sender {
+        font-weight: bold;
+        display: block;
+      }
+      #input-form {
+        margin-top: 3px;
+        border-top: 1px solid #FFFFFF;
+        padding-top: 5px;
+        /* Prevents strange form padding issues in IE6 */
+        font-size: 0;
+      }
+      #prompt-input {
+        width: 500px;
+        height: 24px;
+        border-top: 2px solid #808080;
+        border-left: 2px solid #808080;
+        border-right: 2px solid #FFFFFF;
+        border-bottom: 2px solid #FFFFFF;
+        padding: 3px;
+        font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif;
+        font-size: 12px;
+        vertical-align: top;
+      }
+      #send-button {
+        width: 80px;
+        height: 34px; /* Match input height with borders */
+        background-color: #C0C0C0;
+        border-top: 2px solid #FFFFFF;
+        border-left: 2px solid #FFFFFF;
+        border-right: 2px solid #000000;
+        border-bottom: 2px solid #000000;
+        cursor: pointer;
+        margin-left: 4px;
+        vertical-align: top;
+        font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif;
+        font-size: 12px;
+      }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+
+    <div id="container">
+      <h1>Gemini 98 Proxy</h1>
+      <div id="chatbox">
+        <!-- 
+          Your server-side proxy is now responsible for rendering 
+          the conversation history here on every page load.
+        -->
+        <div class="message message-gemini">
+          <strong class="sender">Gemini:</strong>Welcome! This is a simple chat interface compatible with very old web browsers. Submit the form to send a message.
+        </div>
+      </div>
+      <!-- This form now uses a standard POST request, causing a full page refresh. -->
+      <form id="input-form" action="/api/chat" method="POST">
+        <!-- The 'name' attribute is essential for form submission -->
+        <input type="text" id="prompt-input" name="prompt" autocomplete="off" />
+        <input type="submit" id="send-button" value="Send" />
+      </form>
+    </div>
+
+    <script type="text/javascript" src="index.js"></script>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
