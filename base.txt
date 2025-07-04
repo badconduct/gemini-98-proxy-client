@@ -1,0 +1,3 @@
+const ICQ_LOGO_BASE64_DATA =
+  "";
+const ICQ_ONLINE_BASE64_DATA = ""

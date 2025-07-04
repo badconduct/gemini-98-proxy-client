@@ -8,6 +8,7 @@
 
     This is a polyfill for legacy browsers that do not have a native JSON object.
 */
+
 if (typeof JSON !== "object") {
   JSON = {};
 }
@@ -226,14 +227,18 @@ if (typeof JSON !== "object") {
 })();
 
 // Main application logic is now handled by server-side rendering and page reloads.
-// This script just scrolls the chatbox to the latest message.
+// This script just scrolls the chatbox to the latest message and focuses the input.
 (function () {
   try {
-    var chatbox = document.getElementById("chatbox");
-    chatbox.scrollTop = chatbox.scrollHeight;
+    // Only run this script on chat pages, not the buddy list
+    var chatContainer = document.getElementById("chat-container");
+    if (chatContainer) {
+      var chatMessages = document.getElementById("chat-messages");
+      chatMessages.scrollTop = chatMessages.scrollHeight;
 
-    var input = document.getElementById("prompt-input");
-    input.focus();
+      var input = document.getElementById("prompt-input");
+      input.focus();
+    }
   } catch (e) {
     // Fails gracefully if elements aren't found
   }
