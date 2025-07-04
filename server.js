@@ -105,14 +105,41 @@ function getWorldState(req, res, userName, realName) {
   try {
     const cookie = req.cookies[COOKIE_NAME];
     if (cookie) {
-      const worldState = JSON.parse(
+      let worldState = JSON.parse(
         Buffer.from(cookie, "base64").toString("utf8")
       );
+
+      // This logic block handles users with an existing cookie for the same user name.
       if (worldState.userName === userName) {
-        // If they logged in with a different real name, update it.
+        let wasMigrated = false;
+
+        // Migration for userName/realName
         if (worldState.realName !== realName) {
           worldState.realName = realName;
+          wasMigrated = true;
         }
+
+        // Migration for newly added characters to prevent NaN errors
+        FRIEND_PERSONAS.forEach((p) => {
+          if (worldState.userScores[p.key] === undefined) {
+            console.log(`Migrating userScores for new character: ${p.key}`);
+            worldState.userScores[p.key] = Math.floor(Math.random() * 6) + 2;
+            wasMigrated = true;
+          }
+          if (worldState.moderation[p.key] === undefined) {
+            console.log(`Migrating moderation for new character: ${p.key}`);
+            worldState.moderation[p.key] = { warning: false, blocked: false };
+            wasMigrated = true;
+          }
+        });
+
+        if (wasMigrated) {
+          console.log(
+            `World state for ${userName} was migrated. Resaving cookie.`
+          );
+          saveWorldState(res, worldState);
+        }
+
         return worldState;
       }
     }
@@ -120,14 +147,9 @@ function getWorldState(req, res, userName, realName) {
     console.error("Error parsing cookie, generating new world state.", e);
     res.clearCookie(COOKIE_NAME);
   }
+  // If no cookie, or cookie for a different user, generate a new one.
   const newWorldState = generateInitialWorldState(userName, realName);
-  const cookieValue = Buffer.from(JSON.stringify(newWorldState)).toString(
-    "base64"
-  );
-  res.cookie(COOKIE_NAME, cookieValue, {
-    httpOnly: true,
-    maxAge: 90 * 24 * 60 * 60 * 1000,
-  }); // 90 days
+  saveWorldState(res, newWorldState);
   return newWorldState;
 }
 
