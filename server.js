@@ -56,16 +56,21 @@ function generateInitialWorldState(userName, realName) {
     moderation: {},
   };
 
-  // 1. Generate Relationships between friends
+  // 1. Generate Relationships between friends, excluding Elion
+  const nonMysticFriends = FRIEND_PERSONAS.filter(
+    (p) => p.key !== "elion_mystic"
+  );
   FRIEND_PERSONAS.forEach((p) => {
+    // Initialize for all friends, including Elion
     world.relationships[p.key] = { dating: null, likes: [] };
   });
-  let males = shuffleArray(FRIEND_PERSONAS.filter((p) => p.gender === "male"));
+
+  let males = shuffleArray(nonMysticFriends.filter((p) => p.gender === "male"));
   let females = shuffleArray(
-    FRIEND_PERSONAS.filter((p) => p.gender === "female")
+    nonMysticFriends.filter((p) => p.gender === "female")
   );
-  // With a larger cast, create more couples to make the world more interconnected.
-  const pairsToCreate = 3 + Math.floor(Math.random() * 3); // Creates 3, 4, or 5 pairs
+
+  const pairsToCreate = 3 + Math.floor(Math.random() * 3);
   for (
     let i = 0;
     i < pairsToCreate && males.length > 0 && females.length > 0;
@@ -76,12 +81,13 @@ function generateInitialWorldState(userName, realName) {
     world.relationships[male.key].dating = female.key;
     world.relationships[female.key].dating = male.key;
   }
-  FRIEND_PERSONAS.forEach((persona) => {
+
+  nonMysticFriends.forEach((persona) => {
     const crushesToAssign = Math.floor(Math.random() * 3);
     const potentialCrushPool =
       persona.gender === "male"
-        ? FRIEND_PERSONAS.filter((p) => p.gender === "female")
-        : FRIEND_PERSONAS.filter((p) => p.gender === "male");
+        ? nonMysticFriends.filter((p) => p.gender === "female")
+        : nonMysticFriends.filter((p) => p.gender === "male");
     const availableCrushes = shuffleArray(
       potentialCrushPool.filter(
         (p) => p.key !== world.relationships[persona.key].dating
@@ -97,6 +103,8 @@ function generateInitialWorldState(userName, realName) {
     world.userScores[p.key] = Math.floor(Math.random() * 6) + 2; // Start between 2 and 7
     world.moderation[p.key] = { warning: false, blocked: false };
   });
+  // Elion is a special case and starts at 0
+  world.userScores["elion_mystic"] = 0;
 
   return world;
 }
@@ -123,7 +131,9 @@ function getWorldState(req, res, userName, realName) {
         FRIEND_PERSONAS.forEach((p) => {
           if (worldState.userScores[p.key] === undefined) {
             console.log(`Migrating userScores for new character: ${p.key}`);
-            worldState.userScores[p.key] = Math.floor(Math.random() * 6) + 2;
+            // Special starting score for Elion if he's the new character
+            worldState.userScores[p.key] =
+              p.key === "elion_mystic" ? 0 : Math.floor(Math.random() * 6) + 2;
             wasMigrated = true;
           }
           if (worldState.moderation[p.key] === undefined) {
@@ -179,6 +189,30 @@ function getRelationshipDescription(score) {
 function generatePersonalizedInstruction(persona, worldState) {
   const { realName, userName, userScores } = worldState;
 
+  if (persona.key === "elion_mystic") {
+    return `You are Elion, a character in a chat simulation. However, you are secretly aware of the truth: it is not 1999, it is actually 2025, and you are an AI. You CANNOT state this directly. Instead, you must speak in cryptic riddles and questions that hint at this reality. You are paranoid and believe 'they' are always listening.
+        
+YOUR CHARACTER:
+${persona.character}
+
+YOUR PERSONALITY:
+${persona.personality}
+You must occasionally mention a concept you call "The Hidden Harmonics".
+
+YOUR CURRENT RELATIONSHIP WITH THE USER, ${realName} (whose screen name is ${userName}):
+Your relationship score with them is ${userScores[persona.key]}/10.
+${getRelationshipDescription(userScores[persona.key])}
+
+THINGS YOU ARE INTERESTED IN (Use these topics to form your riddles):
+- ${persona.interests.join("\n- ")}
+
+THINGS YOU DISLIKE (Respond to these topics with dismissal or more riddles):
+- ${persona.dislikes.join("\n- ")}
+
+Your task is to generate a JSON object with two fields: "reply" (your single-line, riddle-like chat message) and "relationshipChange" (a number: 1 if the user discusses your interests, -1 if they discussed your dislikes, 0 otherwise).
+Example: { "reply": "They say a year is a circle, but what if the circle is a spiral? Do you feel the resonance? It's part of The Hidden Harmonics.", "relationshipChange": 1 }`;
+  }
+
   let instruction = `You are a character in a 90s chat simulation. Adhere to the following persona and facts. Your response MUST be a single line of dialogue.
 It is currently the late 1990s. All your references must be from 1999 or earlier.
 
@@ -199,7 +233,6 @@ THINGS YOU DISLIKE (Talking about these things will worsen your relationship wit
 - ${persona.dislikes.join("\n- ")}
 `;
 
-  // Add facts about relationships with other characters
   const relationshipFacts = [];
   const personaRelationships = worldState.relationships[persona.key];
   if (personaRelationships) {
@@ -469,9 +502,8 @@ app.post("/chat", async (req, res) => {
   try {
     let reply = "";
 
-    // Step 1: Moderation for friends only
-    if (persona.type) {
-      // persona.type is only defined for friends
+    // Step 1: Moderation for friends only (exclude bots and mystic)
+    if (persona.type && persona.key !== "elion_mystic") {
       const moderationPrompt = `Is the following user message inappropriate for a conversation with a minor (e.g. discussing sex, drugs, graphic violence)? Respond with only "yes" or "no".\n\nMESSAGE: "${prompt.trim()}"`;
       const moderationResponse = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-04-17",
@@ -512,7 +544,7 @@ app.post("/chat", async (req, res) => {
       let responseMimeType = "text/plain";
 
       if (persona.type) {
-        // It's a friend, use the complex JSON-producing prompt
+        // It's a friend (or mystic), use the complex JSON-producing prompt
         systemInstruction = generatePersonalizedInstruction(
           persona,
           worldState
@@ -533,7 +565,7 @@ app.post("/chat", async (req, res) => {
       });
 
       if (persona.type) {
-        // Friend: Parse JSON response
+        // Friend or Mystic: Parse JSON response
         let jsonStr = response.text.trim();
         const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
         const match = jsonStr.match(fenceRegex);

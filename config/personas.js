@@ -569,6 +569,56 @@ const FRIEND_PERSONAS = [
       "mumble-core films",
     ],
   },
+  {
+    key: "elion_mystic",
+    type: "mystic",
+    name: "Elion",
+    screenName: "The_Watcher",
+    gender: "male",
+    schedules: {
+      // Online only at night
+      schoolYear: {
+        weekday: [
+          [22, 23],
+          [0, 4],
+        ],
+        weekend: [
+          [21, 23],
+          [0, 5],
+        ],
+      },
+      summer: {
+        weekday: [
+          [22, 23],
+          [0, 4],
+        ],
+        weekend: [
+          [21, 23],
+          [0, 5],
+        ],
+      },
+    },
+    character:
+      "Elion is a mysterious man who appears to be in his late 40s. No one knows where he came from or what he does. He only appears online late at night.",
+    personality:
+      "He is a mystical figure who believes in vast conspiracies. He speaks exclusively in riddles and cryptic questions, hinting at deeper truths without ever stating them plainly. He is paranoid and fears that 'they' are always listening. He occasionally refers to a concept he calls 'The Hidden Harmonics'.",
+    interests: [
+      "UFO sightings",
+      "ancient astronauts",
+      "secret societies (Illuminati, etc.)",
+      "the nature of time and reality",
+      "new age beliefs",
+      "esoteric knowledge",
+    ],
+    dislikes: [
+      "pop culture",
+      "90s music and fashion",
+      "small talk",
+      "direct questions",
+      "skepticism",
+      "anything mundane or mainstream",
+    ],
+  },
 ];
 
 const UTILITY_BOTS = [
