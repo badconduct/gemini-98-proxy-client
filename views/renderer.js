@@ -60,16 +60,11 @@ function renderBuddyListPage(worldState, onlineFriendKeys, offlineFriendKeys) {
         const persona = ALL_PERSONAS.find((p) => p.key === key);
         if (!persona) return "";
 
-        const isBlocked =
-          worldState.moderation[key] && worldState.moderation[key].blocked;
+        const isBlocked = worldState.moderation[key]?.blocked;
         const useOfflineIcon = isOffline || isBlocked;
 
-        let icon;
-        if (isBlocked) {
-          icon = "/icq-blocked.png";
-        } else {
-          icon = useOfflineIcon ? "/icq-offline.png" : "/icq-online.png";
-        }
+        let icon = useOfflineIcon ? "/icq-offline.png" : "/icq-online.png";
+        if (isBlocked) icon = "/icq-blocked.png";
 
         const statusParam = useOfflineIcon ? "&status=offline" : "";
         const url = `/chat?friend=${persona.key}&userName=${encodeURIComponent(
@@ -90,9 +85,7 @@ function renderBuddyListPage(worldState, onlineFriendKeys, offlineFriendKeys) {
             }', 'width=400,height=300,resizable=yes,scrollbars=yes'); return false;`
           : `window.open('${url}', 'chat_${persona.key}', 'width=520,height=550,resizable=yes,scrollbars=yes'); return false;`;
 
-        const displayName = persona.screenName
-          ? persona.screenName
-          : persona.name;
+        const displayName = persona.screenName || persona.name;
         const title = persona.screenName ? persona.name : "";
 
         return `<div class="${cssClass}"><img src="${icon}" alt="Status"><a href="#" title="${escapeHtml(
@@ -104,9 +97,7 @@ function renderBuddyListPage(worldState, onlineFriendKeys, offlineFriendKeys) {
 
   const onlineFriends = createLinks(onlineFriendKeys, false);
   const offlineFriends = createLinks(offlineFriendKeys, true);
-
-  const botKeys = UTILITY_BOTS.map((b) => b.key);
-  const botLinks = createLinks(botKeys);
+  const botLinks = createLinks(UTILITY_BOTS.map((b) => b.key));
 
   const styles = `
       body { background-color: #008080; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 12px; margin: 0; padding: 20px; text-align: center; }
@@ -191,48 +182,117 @@ function renderChatWindowPage(
   const historyBase64 = Buffer.from(history).toString("base64");
   const chatHistoryHtml = renderChatMessagesHtml(history, userName);
 
-  let relationshipScoreText = "";
   const friendPersona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
-  if (friendPersona && worldState.userScores[friendKey] !== undefined) {
-    relationshipScoreText = `Relationship: ${worldState.userScores[friendKey]}/10`;
-  }
+  const relationshipScore =
+    friendPersona && worldState.userScores[friendKey] !== undefined
+      ? `Relationship: ${worldState.userScores[friendKey]}/10`
+      : "";
+
+  const promptText = isBlocked
+    ? "You have been blocked by this user."
+    : isOffline
+    ? "The user is currently offline."
+    : "";
 
   const isDisabled = isOffline || isBlocked;
 
-  let promptText = "";
-  if (isBlocked) {
-    promptText = "You have been blocked by this user.";
-  } else if (isOffline) {
-    promptText = "The user is currently offline.";
-  }
-
-  const headerText = friendPersona
-    ? `${escapeHtml(persona.name)} (${relationshipScoreText})`
-    : escapeHtml(persona.name);
-
   const styles = `
-      body { background-color: #008080; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 10px; margin: 0; padding: 0; overflow: hidden; }
-      #chat-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid #000000; border-top-color: #FFFFFF; border-left-color: #FFFFFF; background-color: #C0C0C0; padding: 3px; }
-      #header { position: absolute; top: 3px; left: 3px; right: 3px; height: 24px; background: #000080; color: #FFFFFF; font-size: 12px; font-weight: bold; line-height: 24px; padding: 0 8px; }
+      html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #008080;
+        font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif;
+        font-size: 10px;
+      }
+      #chat-container {
+        width: 100%;
+        height: 100%;
+        border: 2px solid #000000;
+        border-top-color: #FFFFFF;
+        border-left-color: #FFFFFF;
+        background-color: #C0C0C0;
+        padding: 3px;
+        box-sizing: border-box;
+      }
+      #header {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        right: 3px;
+        height: 24px;
+        background: #000080;
+        color: #FFFFFF;
+        font-size: 12px;
+        font-weight: bold;
+        line-height: 24px;
+        padding: 0 8px;
+      }
       #header img { vertical-align: middle; margin-right: 8px; }
-      #chat-messages { position: absolute; top: 30px; left: 3px; right: 3px; bottom: 85px; overflow-y: scroll; border: 2px inset #808080; background-color: #FFFFE1; padding: 10px; text-align: left; }
-      .message { margin-bottom: 5px; white-space: pre-wrap; word-wrap: break-word; }
+      #chat-messages {
+        position: absolute;
+        top: 30px;
+        left: 3px;
+        right: 3px;
+        bottom: 85px;
+        overflow-y: scroll;
+        border: 2px inset #808080;
+        background-color: #FFFFE1;
+        padding: 10px;
+        text-align: left;
+      }
+      .message { margin-bottom: 5px; white-space: pre-wrap; word-wrap: break-word; zoom: 1; }
       .message-user { color: #0000FF; text-align: right; }
       .message-bot { color: #FF0000; text-align: left; }
       .message-system { color: #808080; font-style: italic; text-align: center; }
-      #input-form { position: absolute; bottom: 3px; left: 3px; right: 3px; height: 80px; }
-      #prompt-input { width: 100%; height: 50px; box-sizing: border-box; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 10px; border: 2px inset #808080; }
+      #input-form {
+        position: absolute;
+        bottom: 3px;
+        left: 3px;
+        right: 3px;
+        height: 80px;
+      }
+      #prompt-input {
+        width: 100%;
+        height: 50px;
+        box-sizing: border-box;
+        font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif;
+        font-size: 10px;
+        border: 2px inset #808080;
+      }
       #prompt-input.disabled { background-color: #C0C0C0; }
-      #send-button { float: left; width: 80px; height: 24px; background-color: #C0C0C0; border: 2px outset #FFFFFF; cursor: pointer; margin-top: 3px; }
-      #send-button.disabled { border-style: inset; color: #808080; cursor: default; }
-      #clear-link { float: right; font-size: 10px; margin-top: 8px; margin-right: 8px; }
+      #send-button {
+        float: left;
+        width: 80px;
+        height: 24px;
+        background-color: #C0C0C0;
+        border: 2px outset #FFFFFF;
+        cursor: pointer;
+        margin-top: 3px;
+      }
+      #send-button.disabled {
+        border-style: inset;
+        color: #808080;
+        cursor: default;
+      }
+      #clear-link {
+        float: right;
+        font-size: 10px;
+        margin-top: 8px;
+        margin-right: 8px;
+      }
     `;
+
   const body = `
       <div id="chat-container">
-        <div id="header"><img src="/icq-logo.gif" width="16" height="16">Chat with ${headerText}</div>
+        <div id="header"><img src="/icq-logo.gif" width="16" height="16">Chat with ${escapeHtml(
+          persona.name
+        )}${relationshipScore ? " (" + relationshipScore + ")" : ""}</div>
         <div id="chat-messages">${chatHistoryHtml}</div>
         <form id="input-form" action="/chat" method="POST">
-          <textarea id="prompt-input" name="prompt" rows="3" class="${
+          <textarea id="prompt-input" name="prompt" class="${
             isDisabled ? "disabled" : ""
           }" ${isDisabled ? "disabled" : ""}>${escapeHtml(
     promptText
@@ -244,7 +304,7 @@ function renderChatWindowPage(
           <input type="submit" id="send-button" value="Send" class="${
             isDisabled ? "disabled" : ""
           }" ${isDisabled ? "disabled" : ""}>
-          <a id="clear-link" href="/chat?friend=${escapeHtml(
+          <a id="clear-link" href="/chat?friend=${encodeURIComponent(
             friendKey
           )}&userName=${encodeURIComponent(
     userName
@@ -252,18 +312,20 @@ function renderChatWindowPage(
         </form>
       </div>
     `;
+
   const script = `
-        (function() {
-          try {
-            var chatMessages = document.getElementById('chat-messages');
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            var input = document.getElementById('prompt-input');
-            if (input && !input.disabled) {
-              input.focus();
-            }
-          } catch(e) {}
-        })();
+      (function() {
+        try {
+          var chatMessages = document.getElementById('chat-messages');
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+          var input = document.getElementById('prompt-input');
+          if (input && !input.disabled) {
+            input.focus();
+          }
+        } catch(e) {}
+      })();
     `;
+
   return renderHtmlPage({
     title: `Chat with ${escapeHtml(persona.name)}`,
     styles,
