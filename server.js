@@ -511,19 +511,35 @@ app.post("/chat", async (req, res) => {
       });
 
       if (moderationResponse.text.toLowerCase().includes("yes")) {
-        if (worldState.moderation[friendKey].warning) {
-          // Second strike: block user
+        const currentScore = worldState.userScores[friendKey];
+
+        if (currentScore < 10) {
+          // Non-best friend: Immediate -2 penalty
+          worldState.userScores[friendKey] = clamp(currentScore - 2, 0, 10);
+          reply = "Yuk, that was gross. Don’t say that.";
+          history += `\n\n${persona.name}: (${getTimestamp()}) ${reply}`;
+        } else {
+          // Best friend: Issue warning first, then -1 on second time
+          if (worldState.moderation[friendKey].warning) {
+            worldState.userScores[friendKey] = clamp(currentScore - 1, 0, 10);
+            reply = "Come on... don’t make me block you.";
+            history += `\n\n${persona.name}: (${getTimestamp()}) ${reply}`;
+          } else {
+            worldState.moderation[friendKey].warning = true;
+            reply = "That was weird. Don't say stuff like that again.";
+            history += `\n\n${persona.name}: (${getTimestamp()}) ${reply}`;
+          }
+        }
+
+        // Block if score hits 0
+        if (worldState.userScores[friendKey] <= 0) {
           worldState.moderation[friendKey].blocked = true;
           reply = `System: (${getTimestamp()}) You have been blocked by ${
             persona.name
           }.`;
-          history = reply; // Reset history to just the blocked message
-        } else {
-          // First strike: issue warning
-          worldState.moderation[friendKey].warning = true;
-          reply = "Yuk, I'm going to block you if you talk about that";
-          history += `\n\n${persona.name}: (${getTimestamp()}) ${reply}`;
+          history = reply;
         }
+
         saveWorldState(res, worldState);
         return res.send(
           renderChatWindowPage(
