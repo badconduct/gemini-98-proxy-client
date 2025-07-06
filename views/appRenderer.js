@@ -40,7 +40,7 @@ function renderBuddyListPage(
 
         const onclick = isBlocked
           ? `window.open('/apology?friend=${persona.key}', 'apology_${persona.key}', 'width=400,height=300,resizable=yes,scrollbars=yes'); return false;`
-          : `window.open('${url}', 'chat_${persona.key}', 'width=520,height=550,resizable=yes,scrollbars=yes'); return false;`;
+          : `window.open('${url}', 'chat_${persona.key}', 'width=520,height=600,resizable=yes,scrollbars=yes'); return false;`;
 
         const displayName = persona.screenName
           ? persona.screenName
@@ -174,19 +174,23 @@ function renderChatMessagesHtml(history, userName) {
       const [_, sender, time, message] = parts;
       const className =
         sender.trim() === userName ? "message-user" : "message-bot";
+
+      // Process newlines correctly by escaping first, then replacing \n with <br />
+      const processedMessage = escapeHtml(message.trim()).replace(
+        /\n/g,
+        "<br />"
+      );
+
       const formattedMessage =
         sender.trim() === userName
           ? `(${escapeHtml(time)}) <b>${escapeHtml(
               sender
-            )}:</b><br>${escapeHtml(message.trim())}`
+            )}:</b><br>${processedMessage}`
           : `<b>${escapeHtml(sender)}</b> (${escapeHtml(
               time
-            )}):<br>${escapeHtml(message.trim())}`;
+            )}):<br>${processedMessage}`;
 
-      return `<div class="message ${className}">${formattedMessage.replace(
-        /\n/g,
-        "<br />"
-      )}</div>`;
+      return `<div class="message ${className}">${formattedMessage}</div>`;
     })
     .join("");
 }
@@ -231,11 +235,11 @@ function renderChatWindowPage({
     : escapeHtml(persona.name);
 
   const styles = `
-      body { background-color: #008080; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 10px; margin: 0; padding: 0; overflow: hidden; }
+      body { background-color: #008080; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 10px; margin: 0; padding: 0; }
       /* Table-based layout for IE6 compatibility */
-      #chat-table { width: 100%; height: 100%; border-collapse: collapse; border: 2px solid #000000; border-top-color: #FFFFFF; border-left-color: #FFFFFF; background-color: #C0C0C0; }
+      #chat-table { width: 100%; border-collapse: collapse; border: 2px solid #000000; border-top-color: #FFFFFF; border-left-color: #FFFFFF; background-color: #C0C0C0; }
       #header-td { height: 1px; padding: 3px 3px 0 3px; }
-      #messages-td { height: 100%; padding: 3px; }
+      #messages-td { padding: 3px; }
       #form-td { height: 1px; padding: 0 3px 3px 3px; }
       
       /* Header styles */
@@ -296,26 +300,64 @@ function renderChatWindowPage({
     `;
   const script = `
         (function() {
-          try {
-            var chatMessages = document.getElementById('chat-messages');
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            var input = document.getElementById('prompt-input');
-            if (input && !input.disabled) {
-              input.focus();
-              input.onkeydown = function(e) {
-                var event = e || window.event;
-                var keyCode = event.keyCode || event.which;
-                if (keyCode === 13 && !event.shiftKey && !event.ctrlKey) {
-                  if (event.preventDefault) {
-                    event.preventDefault();
-                  } else {
-                    event.returnValue = false; // For older IE
+          function resizeLayout() {
+            try {
+              var viewportHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+              var header = document.getElementById('header-td');
+              var form = document.getElementById('form-td');
+              var messages = document.getElementById('messages-td');
+
+              if (!header || !form || !messages) return;
+              
+              var nonContentHeight = header.offsetHeight + form.offsetHeight;
+              // Add a buffer for table borders and padding
+              var buffer = 15;
+              var newHeight = viewportHeight - nonContentHeight - buffer;
+
+              if (newHeight > 50) { // Sanity check to prevent negative heights
+                  messages.style.height = newHeight + 'px';
+              }
+            } catch (e) {}
+          }
+
+          function initChat() {
+              try {
+                  // Run layout calculation once on load
+                  resizeLayout();
+
+                  // Set up resize handler
+                  window.onresize = resizeLayout;
+
+                  // Scroll to bottom
+                  var chatMessages = document.getElementById('chat-messages');
+                  if (chatMessages) {
+                      chatMessages.scrollTop = chatMessages.scrollHeight;
                   }
-                  document.getElementById('input-form').submit();
-                }
-              };
-            }
-          } catch(e) {}
+
+                  // Set up input handler
+                  var input = document.getElementById('prompt-input');
+                  if (input && !input.disabled) {
+                    input.focus();
+                    input.onkeydown = function(e) {
+                      var event = e || window.event;
+                      var keyCode = event.keyCode || event.which;
+                      if (keyCode === 13 && !event.shiftKey && !event.ctrlKey) {
+                        if (event.preventDefault) {
+                          event.preventDefault();
+                        } else {
+                          event.returnValue = false; // For older IE
+                        }
+                        document.getElementById('input-form').submit();
+                      } else if (keyCode === 13 && (event.shiftKey || event.ctrlKey)) {
+                        // Allow manual newlines with shift+enter or ctrl+enter
+                      }
+                    };
+                  }
+              } catch(e) {}
+          }
+
+          // Run initialization
+          initChat();
         })();
     `;
   return renderHtmlPage({

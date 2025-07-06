@@ -100,7 +100,7 @@ function renderLoginSuccessPage() {
 
   const script = `
         try {
-            var buddyWindow = window.open('/buddylist', 'buddy_list_main', 'width=270,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes');
+            var buddyWindow = window.open('/buddylist', 'buddy_list_main', 'width=300,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes');
             if (buddyWindow) {
                 buddyWindow.focus();
             } else {

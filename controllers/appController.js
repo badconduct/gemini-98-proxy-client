@@ -20,33 +20,6 @@ if (!apiKey) {
 }
 const ai = new GoogleGenAI({ apiKey });
 
-/**
- * Transforms the flat history string into the array format required by the Gemini API.
- * @param {string} historyText The flat text history.
- * @param {string} userName The current user's screen name.
- * @returns {Array<object>} The structured history.
- */
-function buildHistoryForApi(historyText, userName) {
-  return historyText
-    .split("\n\n")
-    .map((line) => {
-      if (
-        line.startsWith("System:") ||
-        line.startsWith("Image:") ||
-        !line.trim()
-      )
-        return null;
-      const dialogueMatch = line.match(/^([^:]+):\s\(([^)]+)\)\s?(.*)$/s);
-      if (!dialogueMatch) return null;
-      const sender = dialogueMatch[1].trim();
-      const message = (dialogueMatch[3] || "").trim();
-      if (!message) return null;
-      const role = sender === userName ? "user" : "model";
-      return { role: role, parts: [{ text: message }] };
-    })
-    .filter(Boolean);
-}
-
 // --- Background Image Generation ---
 
 async function generateImageInBackground(jobId, persona, userName) {
@@ -249,7 +222,7 @@ const postChatMessage = async (req, res) => {
     return req.session.destroy(() => res.redirect("/"));
   }
 
-  const persona = ALL_PERSONAS.find((p) => p.key === friendKey);
+  const persona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
 
   if (!persona) {
     return res.status(404).send("Error: Friend not found.");
@@ -277,131 +250,101 @@ const postChatMessage = async (req, res) => {
   history += `\n\n${userName}: (${getTimestamp()}) ${prompt.trim()}`;
 
   try {
-    let reply = "";
+    const contents = aiLogic.buildHistoryForApi(history, userName);
+    const systemInstruction = aiLogic.generatePersonalizedInstruction(
+      persona,
+      worldState
+    );
+    const config = {
+      systemInstruction,
+      responseMimeType: "application/json",
+    };
 
-    const contents = buildHistoryForApi(history, userName);
-    if (contents.length > 0) {
-      let systemInstruction;
-      let responseMimeType = "text/plain";
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-04-17",
+      contents,
+      config,
+    });
 
-      if (persona.key === "nostalgia_bot") {
-        systemInstruction = aiLogic.generateNostalgiaBotInstruction(
+    let jsonStr = response.text.trim();
+    const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
+    const match = jsonStr.match(fenceRegex);
+    if (match && match[2]) {
+      jsonStr = match[2].trim();
+    }
+    const parsed = JSON.parse(jsonStr);
+
+    if (parsed.isImageRequest) {
+      const jobId = uuidv4();
+      global.imageJobs[jobId] = { status: "pending" };
+      generateImageInBackground(jobId, persona, userName);
+
+      history += `\n\n${persona.name}: (${getTimestamp()}) Yeah, hold on...`;
+      history += `\n\nSystem: (${getTimestamp()}) ${
+        persona.name
+      } is taking a picture. This might take a moment. The window will refresh automatically.`;
+
+      worldState.chatHistories[friendKey] = history;
+      writeProfile(userName, worldState);
+
+      const metaRefreshTag = `<meta http-equiv="refresh" content="15; URL=/check-image?jobId=${jobId}&friend=${friendKey}">`;
+
+      return res.send(
+        renderChatWindowPage({
           persona,
-          worldState
+          worldState,
+          history,
+          metaRefreshTag,
+          showScores,
+        })
+      );
+    }
+
+    // --- Gossip Mechanic ---
+    if (parsed.userRevealedAge === true) {
+      console.log(
+        `[SOCIAL] User ${userName} revealed their true age to ${persona.name}.`
+      );
+      worldState.ageKnowledge[friendKey] = { knows: true, source: "user" };
+      const sourcePersona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
+      if (
+        sourcePersona &&
+        (sourcePersona.group === "student" ||
+          sourcePersona.group === "townie_alumni")
+      ) {
+        const gossipGroup = FRIEND_PERSONAS.filter(
+          (p) => p.group === sourcePersona.group && p.key !== sourcePersona.key
         );
-      } else if (persona.type) {
-        systemInstruction = aiLogic.generatePersonalizedInstruction(
-          persona,
-          worldState
+        console.log(
+          `[GOSSIP] ${sourcePersona.name} is telling ${gossipGroup.length} other people in their group.`
         );
-        responseMimeType = "application/json";
-      } else {
-        systemInstruction = persona.systemInstruction.replace(
-          "{userName}",
-          worldState.realName
-        );
-      }
-
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-04-17",
-        contents,
-        config: { systemInstruction, responseMimeType },
-      });
-
-      if (persona.type && persona.key !== "nostalgia_bot") {
-        let jsonStr = response.text.trim();
-        const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
-        const match = jsonStr.match(fenceRegex);
-        if (match && match[2]) {
-          jsonStr = match[2].trim();
-        }
-        const parsed = JSON.parse(jsonStr);
-
-        if (parsed.isImageRequest) {
-          const jobId = uuidv4();
-          global.imageJobs[jobId] = { status: "pending" };
-          generateImageInBackground(jobId, persona, userName);
-
-          history += `\n\n${
-            persona.name
-          }: (${getTimestamp()}) Yeah, hold on...`;
-          history += `\n\nSystem: (${getTimestamp()}) ${
-            persona.name
-          } is taking a picture. This might take a moment. The window will refresh automatically.`;
-
-          worldState.chatHistories[friendKey] = history;
-          writeProfile(userName, worldState);
-
-          const metaRefreshTag = `<meta http-equiv="refresh" content="15; URL=/check-image?jobId=${jobId}&friend=${friendKey}">`;
-
-          return res.send(
-            renderChatWindowPage({
-              persona,
-              worldState,
-              history,
-              metaRefreshTag,
-              showScores,
-            })
-          );
-        }
-
-        // --- Gossip Mechanic ---
-        if (parsed.userRevealedAge === true) {
-          console.log(
-            `[SOCIAL] User ${userName} revealed their true age to ${persona.name}.`
-          );
-          // 1. Update the persona who was told directly.
-          worldState.ageKnowledge[friendKey] = {
-            knows: true,
-            source: "user",
-          };
-
-          // 2. Propagate the knowledge if the persona is in a gossip-enabled group.
-          const sourcePersona = FRIEND_PERSONAS.find(
-            (p) => p.key === friendKey
-          );
-          if (
-            sourcePersona &&
-            (sourcePersona.group === "student" ||
-              sourcePersona.group === "townie_alumni")
-          ) {
-            const gossipGroup = FRIEND_PERSONAS.filter(
-              (p) =>
-                p.group === sourcePersona.group && p.key !== sourcePersona.key
-            );
-            console.log(
-              `[GOSSIP] ${sourcePersona.name} is telling ${gossipGroup.length} other people in their group.`
-            );
-            gossipGroup.forEach((member) => {
-              // Don't overwrite if they already know from a more direct source
-              if (!worldState.ageKnowledge[member.key]) {
-                worldState.ageKnowledge[member.key] = {
-                  knows: true,
-                  source: friendKey, // The source is the key of the persona who was told.
-                };
-              }
-            });
+        gossipGroup.forEach((member) => {
+          if (!worldState.ageKnowledge[member.key]) {
+            worldState.ageKnowledge[member.key] = {
+              knows: true,
+              source: friendKey,
+            };
           }
-        }
-
-        reply = parsed.reply || "sry, my mind is blank rn...";
-
-        const change = parseInt(parsed.relationshipChange, 10) || 0;
-        if (change !== 0) {
-          const oldScore = worldState.userScores[friendKey];
-          worldState.userScores[friendKey] = clamp(oldScore + change, 0, 100);
-        }
-        history += `\n\n${persona.name}: (${getTimestamp()}) ${reply}`;
-      } else {
-        reply = response.text || "sry, my mind is blank rn...";
-        if (persona.key === "nostalgia_bot") {
-          reply = reply.replace(/[\r\n]+/g, " ").trim();
-        }
-        history += `\n\n${persona.name}: (${getTimestamp()}) ${reply}`;
+        });
       }
     }
+
+    const reply = parsed.reply || "sry, my mind is blank rn...";
+    const change = parseInt(parsed.relationshipChange, 10) || 0;
+
+    // Friends should speak in single lines/paragraphs. Remove newlines to prevent display bugs.
+    const finalReply = reply.replace(/[\r\n]+/g, " ").trim();
+
+    if (change !== 0) {
+      const oldScore = worldState.userScores[friendKey];
+      worldState.userScores[friendKey] = clamp(oldScore + change, 0, 100);
+    }
+    history += `\n\n${persona.name}: (${getTimestamp()}) ${finalReply}`;
   } catch (err) {
-    console.error("API call or history processing error:", err);
+    console.error(
+      `[Friend Controller Error] API call failed for ${persona.name}:`,
+      err
+    );
     history += `\n\nSystem: (${getTimestamp()}) Error - My brain is broken, couldn't connect to the mothership. Try again later.`;
   }
 

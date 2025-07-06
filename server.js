@@ -9,6 +9,8 @@ const { loadAsset } = require("./lib/utils");
 const authController = require("./controllers/authController");
 const appController = require("./controllers/appController");
 const adminController = require("./controllers/adminController");
+const botController = require("./controllers/botController");
+const { UTILITY_BOTS } = require("./config/personas");
 
 // --- Configuration ---
 const port = process.env.PORT || 3000;
@@ -79,6 +81,17 @@ const requireAdmin = (req, res, next) => {
   }
 };
 
+// --- Chat Dispatcher ---
+const botKeys = new Set(UTILITY_BOTS.map((b) => b.key));
+const postChatDispatcher = (req, res) => {
+  const { friend: friendKey } = req.body;
+  if (botKeys.has(friendKey)) {
+    return botController.postBotMessage(req, res);
+  } else {
+    return appController.postChatMessage(req, res);
+  }
+};
+
 // --- Public Routes ---
 app.get("/", authController.getLauncherPage);
 app.get("/new-user", authController.getNewUserPage);
@@ -90,7 +103,7 @@ app.get("/logout", authController.getLogout);
 app.get("/buddylist", requireLogin, appController.getBuddyListPage);
 app.get("/about", requireLogin, appController.getAboutPage);
 app.get("/chat", requireLogin, appController.getChatPage);
-app.post("/chat", requireLogin, appController.postChatMessage);
+app.post("/chat", requireLogin, postChatDispatcher); // Use the new dispatcher
 app.get("/chat/clear", requireLogin, appController.getClearChat);
 app.get("/apology", requireLogin, appController.getApologyPage);
 app.post("/apologize", requireLogin, appController.postApology);
