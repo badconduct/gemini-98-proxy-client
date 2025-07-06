@@ -30,21 +30,17 @@ The front-end is fully retro-compatible:
 
 ---
 
-## 🧠 Features
+## 🧠 Core Features
+
+### Key Features
 
 - **Secure, File-Based Profiles:** No more cookies for state. Every user has a password-protected profile saved securely on the server.
 - **Multi-Profile Launcher System:** The application starts with a login portal. Log in to an existing account or create a new one. The buddy list then "launches" in a new window.
-- **Administrator Role & User Management:** The first user created becomes the prime administrator, who can view all users, grant/revoke admin status, and delete accounts.
-- **Advanced Social & Age Dynamics:**
-  - **Social Groups:** Friends are organized into distinct groups (Students, Townies/Alumni, Online Friends) with their own social rules.
-  - **Dynamic Relationships:** Your age and social group determine your starting relationships with other characters.
-  - **Personalized AI:** The AI's personality and behavior change dramatically based on your age, social status, and conversation history.
-- **Deep AI Personas:** Chat with over a dozen unique AI friends, each with distinct personalities, interests, and schedules.
+- **Deep AI Personas:** Chat with over a dozen unique AI friends, each with distinct personalities, interests, and online/offline schedules that vary based on the season.
+- **Helpful Utility Bots:** Get help from specialized bots: `Code Bot` for programming, `98SE Help Bot` for retro troubleshooting, `Nostalgia Bot` for hints, and a general-purpose `Gemini Bot`.
 - **No Front-End Frameworks:** Works in Netscape 4 or IE6, no webpack, no BS.
 
----
-
-## 🤖 The Social Simulation Engine
+### The Social Simulation Engine (In-Depth)
 
 The core of the application is a dynamic rules engine that generates unique system instructions for the Gemini API in real-time.
 
@@ -52,8 +48,18 @@ The core of the application is a dynamic rules engine that generates unique syst
 - **Age-Based Logic:** The simulation's rules change based on your age.
   - **Ages 14-19 (Student):** You're an insider with other students, starting with higher relationship scores.
   - **Ages 20-39 (Townie/Alumni):** You have a natural rapport with the other townies.
-  - **Ages <=13 or >=40 (Online Friend):** AI friends will be suspicious of you. If you're under 14, they'll become patronizing. If you're over 40, students will find you "creepy" and their opinion of you will permanently decrease with every interaction.
+  - **Ages <=13 or >=40 (Online Friend):** Local AI friends will be suspicious of you. If you reveal you're under 14, they'll become patronizing. If you reveal you're over 40, students will find you "creepy" and their opinion of you will permanently decrease with every interaction.
+- **Gossip Mechanic:** When you reveal your true age to a local friend (a Student or Townie), they'll tell others in their social group! This creates a dynamic world where information spreads and your reputation can change based on who you trust.
 - **Relationship Score:** Your conversations directly impact your relationship score with each friend, unlocking different conversational paths and behaviors.
+
+### Administrator Features
+
+The first user created becomes the **Prime Administrator** with access to powerful tools.
+
+- **User Management Panel:** View all registered users, their last login time, and their A/S/L.
+- **Edit & Reset Users:** Directly edit a user's Age, Sex, or Location. Changing these fields automatically resets that user's social world to match their new identity. You can also reset a user's profile with a single click, wiping their chat history and relationships.
+- **Grant/Revoke Admin Status:** Promote other users to administrators.
+- **Dangerous Options:** An options panel allows you to do things like reset the _entire application_, deleting all profiles and images, forcing a fresh start.
 
 ---
 
@@ -88,7 +94,7 @@ The core of the application is a dynamic rules engine that generates unique syst
 
 5.  **Open the site & Create Your Admin Account**
 
-    - **🖥️ Modern browser:** `http://localhost:3000`
+    - **🖥️ Host browser:** `http://localhost:3000`
     - **🧓 Retro browser (e.g., IE6 on Win98):** `http://<your-local-ip>:3000`
 
     The first account you create will automatically become the permanent, undeletable **Prime Administrator**.

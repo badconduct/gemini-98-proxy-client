@@ -67,7 +67,11 @@ async function postBotMessage(req, res) {
     const config = { systemInstruction };
 
     // Use streaming for bots that need long answers to prevent truncation.
-    if (persona.key === "code_bot" || persona.key === "win98_help_bot") {
+    if (
+      persona.key === "code_bot" ||
+      persona.key === "win98_help_bot" ||
+      persona.key === "nostalgia_bot"
+    ) {
       // Relax safety settings to allow for technical content (code, logs)
       config.safetySettings = [
         {
@@ -101,7 +105,7 @@ async function postBotMessage(req, res) {
       // uses a double newline as a message separator.
       reply = fullReply.trim().replace(/\n\n/g, "\n");
     } else {
-      // Use non-streaming for concise bots (Gemini Bot, Nostalgia Bot)
+      // Use non-streaming for concise bots (Gemini Bot)
       console.log(`[AI] Using non-streaming for ${persona.name}.`);
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-04-17",
