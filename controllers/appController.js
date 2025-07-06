@@ -8,6 +8,7 @@ const {
   renderChatWindowPage,
   renderApologyPage,
   renderFilesPage,
+  renderAboutPage,
 } = require("../views/appRenderer");
 const { getTimestamp, clamp } = require("../lib/utils");
 const { readProfile, writeProfile } = require("../lib/state-manager");
@@ -561,6 +562,15 @@ const getCheckImageStatus = (req, res) => {
   res.send(renderChatWindowPage({ persona, worldState, history, showScores }));
 };
 
+const getAboutPage = (req, res) => {
+  const { userName } = req.session;
+  const worldState = readProfile(userName);
+  if (!worldState) {
+    return req.session.destroy(() => res.redirect("/"));
+  }
+  res.send(renderAboutPage(worldState));
+};
+
 module.exports = {
   getBuddyListPage,
   getChatPage,
@@ -570,4 +580,5 @@ module.exports = {
   postApology,
   getFilesPage,
   getCheckImageStatus,
+  getAboutPage,
 };

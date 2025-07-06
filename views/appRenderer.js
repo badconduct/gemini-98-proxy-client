@@ -88,11 +88,12 @@ function renderBuddyListPage(
   const botLinks = createLinks(botKeys);
 
   const logoutScript = `if(confirm('Are you sure you want to log out?')){ if(window.opener && !window.opener.closed){ window.opener.location.href='/logout'; } window.close(); } return false;`;
+  const aboutScript = `window.open('/about', 'about_window', 'width=350,height=280,resizable=no,scrollbars=no'); return false;`;
 
   let adminLinks = "";
   if (isAdmin) {
     adminLinks = `
-            <a href="/admin/users" onclick="window.open('/admin/users', 'users_window', 'width=450,height=400,resizable=yes,scrollbars=yes'); return false;">Users</a>
+            <a href="/admin/users" onclick="window.open('/admin/users', 'users_window', 'width=700,height=400,resizable=yes,scrollbars=yes'); return false;">Users</a>
             <a href="/admin/options" onclick="window.open('/admin/options', 'options_window', 'width=450,height=500,resizable=yes,scrollbars=yes'); return false;">Options</a>
         `;
   }
@@ -126,6 +127,7 @@ function renderBuddyListPage(
             </td></tr>
             <tr><td style="height: 1px;">
                 <div id="menu-bar">
+                    <a href="#" onclick="${aboutScript}">About</a>
                     <a href="/files" onclick="window.open('/files', 'files_window', 'width=450,height=400,resizable=yes,scrollbars=yes'); return false;">Files</a>
                     ${adminLinks}
                     <a href="#" onclick="${logoutScript}">Logout</a>
@@ -405,9 +407,45 @@ function renderFilesPage(worldState) {
   return renderHtmlPage({ title: "Received Files", styles, body });
 }
 
+function renderAboutPage(worldState) {
+  const { userName, realName, age, sex, location } = worldState;
+
+  const title = "About ICQ98 Proxy";
+  const styles = `
+      body { background-color: #008080; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 12px; margin: 0; padding: 20px; text-align: center; }
+      #container { width: 300px; margin: 0 auto; border-top: 2px solid #FFFFFF; border-left: 2px solid #FFFFFF; border-right: 2px solid #000000; border-bottom: 2px solid #000000; background-color: #C0C0C0; padding: 3px; text-align: left; }
+      h1 { background: #000080; color: #FFFFFF; font-size: 14px; font-weight: bold; padding: 4px 8px; margin: 0; }
+      #content { padding: 15px; background-color: #FFFFFF; border: 1px solid #000000; }
+      p { margin-top: 0; margin-bottom: 10px; line-height: 1.4; }
+      b { font-weight: bold; }
+      hr { border: 0; border-top: 1px solid #808080; margin: 15px 0; }
+    `;
+
+  const appDescription =
+    "A nostalgic chat simulator with AI-powered friends, designed for retro browsers. Powered by Gemini. For hints or suggestions, ask the Nostalgia Bot.";
+
+  const body = `
+        <div id="container">
+            <h1>${escapeHtml(title)}</h1>
+            <div id="content">
+                <p><b>User Name:</b> ${escapeHtml(userName)}</p>
+                <p><b>Real Name:</b> ${escapeHtml(realName)}</p>
+                <p><b>A/S/L:</b> ${escapeHtml(String(age))} / ${escapeHtml(
+    String(sex)
+  )} / ${escapeHtml(String(location))}</p>
+                <hr>
+                <p>${escapeHtml(appDescription)}</p>
+            </div>
+        </div>
+    `;
+
+  return renderHtmlPage({ title, styles, body });
+}
+
 module.exports = {
   renderBuddyListPage,
   renderChatWindowPage,
   renderApologyPage,
   renderFilesPage,
+  renderAboutPage,
 };

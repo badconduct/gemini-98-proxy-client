@@ -88,6 +88,7 @@ app.get("/logout", authController.getLogout);
 
 // --- Protected App Routes ---
 app.get("/buddylist", requireLogin, appController.getBuddyListPage);
+app.get("/about", requireLogin, appController.getAboutPage);
 app.get("/chat", requireLogin, appController.getChatPage);
 app.post("/chat", requireLogin, appController.postChatMessage);
 app.get("/chat/clear", requireLogin, appController.getClearChat);

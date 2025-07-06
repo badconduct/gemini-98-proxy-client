@@ -21,6 +21,9 @@ const getUsersPage = (req, res) => {
         lastLogin: profile ? profile.lastLogin : null,
         isAdmin: profile ? profile.isAdmin : false,
         isPrimeAdmin: profile ? profile.isPrimeAdmin : false,
+        age: profile ? profile.age : "N/A",
+        sex: profile ? profile.sex : "N/A",
+        location: profile ? profile.location : "N/A",
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));

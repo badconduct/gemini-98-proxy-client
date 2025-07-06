@@ -5,7 +5,7 @@ function renderUsersPage({ users, adminUserName }) {
   const title = "User Management";
   const styles = `
       body { background-color: #008080; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 12px; margin: 0; padding: 20px; text-align: center; }
-      #container { width: 400px; margin: 0 auto; border-top: 2px solid #FFFFFF; border-left: 2px solid #FFFFFF; border-right: 2px solid #000000; border-bottom: 2px solid #000000; background-color: #C0C0C0; padding: 3px; text-align: left; }
+      #container { width: 650px; margin: 0 auto; border-top: 2px solid #FFFFFF; border-left: 2px solid #FFFFFF; border-right: 2px solid #000000; border-bottom: 2px solid #000000; background-color: #C0C0C0; padding: 3px; text-align: left; }
       h1 { background: #000080; color: #FFFFFF; font-size: 14px; font-weight: bold; padding: 4px 8px; margin: 0; }
       #users-container { padding: 10px; background-color: #FFFFFF; border: 1px solid #000000; min-height: 200px; max-height: 300px; overflow-y: auto; }
       .users-table { width: 100%; border-collapse: collapse; }
@@ -51,6 +51,9 @@ function renderUsersPage({ users, adminUserName }) {
           user.isPrimeAdmin ? " (Prime)" : ""
         }</td>
                         <td>${escapeHtml(lastLoginStr)}</td>
+                        <td>${escapeHtml(user.age)}</td>
+                        <td>${escapeHtml(user.sex)}</td>
+                        <td>${escapeHtml(user.location)}</td>
                         <td align="center">${isAdminCheckbox}</td>
                         <td>${deleteButtonHtml}</td>
                     </tr>`;
@@ -58,7 +61,7 @@ function renderUsersPage({ users, adminUserName }) {
       .join("");
     usersHtml = `
             <table class="users-table">
-                <tr><th>User Name</th><th>Last Login</th><th>Admin</th><th>Actions</th></tr>
+                <tr><th>User Name</th><th>Last Login</th><th>Age</th><th>Sex</th><th>Location</th><th>Admin</th><th>Actions</th></tr>
                 ${tableRows}
             </table>
         `;
