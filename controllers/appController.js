@@ -92,10 +92,11 @@ const getBuddyListPage = (req, res) => {
 
   const now = new Date();
   const currentHour = now.getHours();
-  const currentMonth = now.getMonth();
+  const currentMonth = now.getMonth(); // 0-indexed: Jan=0, ... July=6, Aug=7
   const currentDay = now.getDay();
 
-  const isSummer = currentMonth >= 5 && currentMonth <= 7;
+  // Summer is July and August. School year is Sep-June.
+  const isSummer = currentMonth === 6 || currentMonth === 7;
   const seasonKey = isSummer ? "summer" : "schoolYear";
 
   const isWeekend = currentDay === 0 || currentDay === 6;
@@ -228,6 +229,11 @@ const postChatMessage = async (req, res) => {
     return res.status(404).send("Error: Friend not found.");
   }
 
+  // --- Seasonal Context for AI ---
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const isSummer = currentMonth === 6 || currentMonth === 7; // July or August
+
   let history = Buffer.from(historyBase64, "base64").toString("utf8");
   const isBlocked =
     worldState.moderation[friendKey] &&
@@ -253,7 +259,8 @@ const postChatMessage = async (req, res) => {
     const contents = aiLogic.buildHistoryForApi(history, userName);
     const systemInstruction = aiLogic.generatePersonalizedInstruction(
       persona,
-      worldState
+      worldState,
+      isSummer
     );
     const config = {
       systemInstruction,
