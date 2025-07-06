@@ -180,6 +180,9 @@ app.use(
 );
 
 // --- Start Server ---
-app.listen(port, () => {
-  console.log(`ICQ 98 Proxy running at http://localhost:${port}`);
+const HOST = process.env.HOST || "localhost"; // Use "localhost" for local dev
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, HOST, () => {
+  console.log(`Server running at http://${HOST}:${PORT}`);
 });
