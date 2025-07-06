@@ -218,15 +218,8 @@ function renderOptionsPage() {
             };
             setCookie('icq98_options', JSON.stringify(options), 1);
             
-            if (confirm("Options have been saved and will be applied on your next login. Would you like to log out now to apply them?")) {
-                if (window.opener && !window.opener.closed) {
-                    window.opener.location.href = '/logout';
-                }
-                window.close();
-            } else {
-                alert("Options saved. Remember to log out and log back in to see the changes.");
-                window.close();
-            }
+            alert("Options have been saved. They will be applied the next time you log in.");
+            window.close();
         }
     `;
 
