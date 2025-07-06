@@ -1,0 +1,4 @@
+{
+  "appService.defaultWebAppToDeploy": "/subscriptions/89a95e57-43a5-4816-aafc-c87dd327fde5/resourceGroups/appsvc_linux_eastus/providers/Microsoft.Web/sites/win98-gem-prox",
+  "appService.deploySubpath": "."
+}
