@@ -302,6 +302,18 @@ function renderChatWindowPage({
             var input = document.getElementById('prompt-input');
             if (input && !input.disabled) {
               input.focus();
+              input.onkeydown = function(e) {
+                var event = e || window.event;
+                var keyCode = event.keyCode || event.which;
+                if (keyCode === 13 && !event.shiftKey && !event.ctrlKey) {
+                  if (event.preventDefault) {
+                    event.preventDefault();
+                  } else {
+                    event.returnValue = false; // For older IE
+                  }
+                  document.getElementById('input-form').submit();
+                }
+              };
             }
           } catch(e) {}
         })();
