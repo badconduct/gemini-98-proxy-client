@@ -11,7 +11,7 @@ const appController = require("./controllers/appController");
 const adminController = require("./controllers/adminController");
 
 // --- Configuration ---
-const port = 3000;
+const port = process.env.PORT || 3000;
 global.imageJobs = {}; // In-memory store for image generation job status
 
 // --- Directory Setup ---
