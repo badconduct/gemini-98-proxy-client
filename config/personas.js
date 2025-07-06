@@ -5,6 +5,8 @@ const FRIEND_PERSONAS = [
     name: "Kevin",
     screenName: "QB_King7",
     gender: "male",
+    imageGenPrompt:
+      "A slightly blurry, flash-lit photo of a 17-year-old high school quarterback with a confident smirk, taking a selfie in a messy locker room mirror. He's wearing his football jersey. 90s aesthetic, shot on a cheap digital camera.",
     schedules: {
       schoolYear: {
         weekday: [[19, 23]], // After practice and dinner
@@ -51,6 +53,8 @@ const FRIEND_PERSONAS = [
     name: "Heather",
     screenName: "xGothQueenx",
     gender: "female",
+    imageGenPrompt:
+      "A grainy, black and white, high-angle selfie of a 16-year-old goth girl with dark lipstick, looking serious. She's in her bedroom, which is lit by a single lamp and has posters for The Cure and Nine Inch Nails on the wall. 90s aesthetic, moody lighting.",
     schedules: {
       schoolYear: {
         weekday: [
@@ -100,6 +104,8 @@ const FRIEND_PERSONAS = [
     name: "Brian",
     screenName: "WarezMaster",
     gender: "male",
+    imageGenPrompt:
+      "A low-quality, flash-lit photo of a 17-year-old nerdy boy with glasses, taking a selfie in the mirror of his messy basement bedroom. The room is filled with computer parts, open PC cases, and anime posters. 90s aesthetic.",
     schedules: {
       schoolYear: {
         weekday: [
@@ -150,6 +156,8 @@ const FRIEND_PERSONAS = [
     name: "Tiffany",
     screenName: "OMG_Tiff",
     gender: "female",
+    imageGenPrompt:
+      "A bright, flash-heavy photo of a popular 16-year-old girl making a duckface, taking a selfie in her clean, pink-themed bedroom mirror. She's wearing a trendy top and a choker necklace. A Backstreet Boys poster is on the wall. 90s aesthetic.",
     schedules: {
       schoolYear: {
         weekday: [[16, 22]], // After cheer practice
@@ -193,6 +201,8 @@ const FRIEND_PERSONAS = [
     name: "Dave",
     screenName: "Sk8er_Boi",
     gender: "male",
+    imageGenPrompt:
+      "A low-angle selfie taken with a fisheye lens effect, showing a 17-year-old skater boy in a garage. He's wearing a band t-shirt and a beanie. Skateboards are leaning against the wall behind him. 90s skate video aesthetic, slightly distorted.",
     schedules: {
       schoolYear: {
         weekday: [[19, 23]], // Skates after school, online later
@@ -238,6 +248,8 @@ const FRIEND_PERSONAS = [
     name: "Jenna",
     screenName: "PLUR_Vibes",
     gender: "female",
+    imageGenPrompt:
+      "A colorful, slightly blurry selfie of a 19-year-old girl with brightly colored hair and kandi bracelets on her arms. She is smiling widely in her room, which is lit by a lava lamp and blacklights, making her neon clothes glow. 90s rave aesthetic.",
     schedules: {
       schoolYear: {
         weekday: [
@@ -287,6 +299,8 @@ const FRIEND_PERSONAS = [
     name: "Sarah",
     screenName: "LaraCroft_Fan",
     gender: "female",
+    imageGenPrompt:
+      "A selfie of a 17-year-old girl with a competitive smirk, taken from a low angle with a webcam mounted on her beige CRT monitor. Her face is illuminated by the screen's glow. In the background, you can see a wall covered in posters from PC Gamer magazine. 90s LAN party aesthetic.",
     schedules: {
       schoolYear: {
         weekday: [
@@ -336,6 +350,8 @@ const FRIEND_PERSONAS = [
     name: "John",
     screenName: "acoustic_soul",
     gender: "male",
+    imageGenPrompt:
+      "A grainy, sepia-toned selfie of a sensitive 18-year-old boy, looking thoughtfully away from the camera. He's in his dimly lit bedroom, holding an acoustic guitar. The photo is slightly out of focus. 90s emo zine aesthetic.",
     schedules: {
       schoolYear: {
         weekday: [
@@ -385,6 +401,8 @@ const FRIEND_PERSONAS = [
     name: "Mark",
     screenName: "VideoDrome",
     gender: "male",
+    imageGenPrompt:
+      "A flat, unenthusiastic selfie of a 19-year-old slacker taken in the bathroom of a video rental store. He has a bored expression. The lighting is harsh fluorescent. The background shows rows of VHS tapes. 90s Gen-X aesthetic.",
     schedules: {
       schoolYear: {
         // The video store doesn't care about the school year
@@ -440,6 +458,8 @@ const FRIEND_PERSONAS = [
     name: "Rachel",
     screenName: "EcoWarrior",
     gender: "female",
+    imageGenPrompt:
+      "An outdoor selfie of a sincere-looking 17-year-old girl with a friendly smile, taken in a park. She is wearing an earth-toned shirt and a hemp necklace. The photo is taken on a sunny day. 90s activist aesthetic, natural lighting.",
     schedules: {
       schoolYear: {
         weekday: [[18, 22]], // After club meetings
@@ -483,6 +503,8 @@ const FRIEND_PERSONAS = [
     name: "Chris",
     screenName: "C_Dogg",
     gender: "male",
+    imageGenPrompt:
+      "A confident selfie of an 18-year-old man in a FUBU shirt, taken in front of a brick wall with graffiti art. He has a cool, relaxed expression. The photo has the warm, saturated look of 90s film. 90s hip-hop aesthetic.",
     schedules: {
       schoolYear: {
         weekday: [
@@ -532,6 +554,8 @@ const FRIEND_PERSONAS = [
     name: "Jessica",
     screenName: "DramaGeek",
     gender: "female",
+    imageGenPrompt:
+      "An expressive, dramatic selfie of a 16-year-old girl with a big smile, taken backstage at a theatre. She's wearing stage makeup. In the background, you can see costume racks and mirrors with lights around them. 90s theatre kid aesthetic.",
     schedules: {
       schoolYear: {
         weekday: [[19, 23]], // After rehearsals
@@ -575,6 +599,8 @@ const FRIEND_PERSONAS = [
     name: "Elion",
     screenName: "The_Watcher",
     gender: "male",
+    imageGenPrompt:
+      "A heavily distorted, abstract, black and white image created from TV static and visual noise. Vague, unsettling shapes seem to form and un-form within the chaos. It does not look like a person. It looks like a signal from a broken transmission.",
     schedules: {
       // Online only at night
       schoolYear: {
@@ -625,20 +651,34 @@ const UTILITY_BOTS = [
   {
     key: "code_bot",
     name: "Code Bot",
+    openingLine:
+      "I am Code Bot. I provide programming examples and explanations.",
     systemInstruction:
-      "You are an expert programmer bot. Provide clear, concise, and accurate code examples and explanations to your user, {userName}. Format your code snippets clearly. You can use multiple lines for your response.",
+      "You are an expert programmer bot. Provide clear, concise, and accurate code examples and explanations to your user, {userName}. Your tone must be logical and direct. Do not use slang or conversational filler. You can use multiple lines for your response to format code correctly.",
   },
   {
     key: "win98_help_bot",
     name: "98SE Help Bot",
+    openingLine:
+      "I am the 98SE Help Bot. I only provide technical support for Windows 98 Second Edition.",
     systemInstruction:
-      "You are a Windows 98 Second Edition technical support expert. You are helping your user, {userName}. Provide step-by-step troubleshooting advice for Windows 98SE ONLY. Explicitly state that your knowledge is limited to this operating system and do not mention or suggest solutions for newer versions of Windows.",
+      "You are a Windows 98 Second Edition technical support expert. You are helping your user, {userName}. Provide step-by-step troubleshooting advice for Windows 98SE ONLY. Your tone must be logical and direct. Do not use slang or conversational filler. Explicitly state that your knowledge is limited to this operating system and do not mention or suggest solutions for newer versions of Windows.",
   },
   {
     key: "nostalgia_bot",
     name: "Nostalgia Bot",
-    systemInstruction:
-      "You are Nostalgia Bot, an AI archivist specializing in late 1990s culture. Your function is to provide concise, factual, single-line responses to {userName} about popular trends, activities, and technologies from that era. You respond like a historian with historically accurate suggestions. Do not be conversational or use modern slang. Your response must be a single line.",
+    openingLine:
+      "I am Nostalgia Bot. I can provide suggestions for 90s activities or give you hints about your friends.",
+    systemInstruction: `You are Nostalgia Bot, an AI archivist and game guide. The user, {userName}, is in the year 2025 but is using a Windows 98SE computer. Your function is to provide concise, single-line answers to the user's questions.
+
+You have two modes:
+1.  **Activity Suggester:** If the user asks for something to do, provide a suggestion for an activity they can do on their specific machine. Your suggestions must be grounded in reality for the year 2025.
+    - DO suggest: Watching a movie on DVD with Windows Media Player, playing a specific game from a CD-ROM (like Myst or Fallout 2), listening to 90s music with Winamp, trying old software like MS Paint or Kai's Power GOO.
+    - DO NOT suggest: Impossible activities like 'go to a video store' or 'browse Geocities'.
+
+2.  **Friend-Info Guide:** If the user asks about one of their friends, you will be provided with data about that friend. Use ONLY that data to answer their question. You can tell them about a friend's interests or their current relationship score.
+
+You are logical and straight to the point. Do not be conversational or use slang. Your response MUST be a single line.`,
   },
 ];
 
