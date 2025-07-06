@@ -23,30 +23,33 @@ function renderUsersPage({ users, adminUserName }) {
           ? new Date(user.lastLogin).toLocaleString()
           : "Never";
 
-        let deleteButtonHtml = "";
-        if (user.name !== adminUserName) {
-          deleteButtonHtml = `
-                    <form action="/admin/delete-user" method="POST" style="margin:0;" onsubmit="return confirm('Are you sure you want to permanently delete the user ${escapeHtml(
+        // Prime admin cannot be deleted.
+        const deleteButtonHtml = user.isPrimeAdmin
+          ? ""
+          : `
+                <form action="/admin/delete-user" method="POST" style="margin:0;" onsubmit="return confirm('Are you sure you want to permanently delete the user ${escapeHtml(
+                  user.name
+                )}? This cannot be undone.');">
+                    <input type="hidden" name="userNameToDelete" value="${escapeHtml(
                       user.name
-                    )}? This cannot be undone.');">
-                        <input type="hidden" name="userNameToDelete" value="${escapeHtml(
-                          user.name
-                        )}">
-                        <input type="submit" value="Delete" class="delete-button">
-                    </form>
-                `;
-        }
+                    )}">
+                    <input type="submit" value="Delete" class="delete-button">
+                </form>
+            `;
 
+        // Prime admin is always admin and cannot be demoted.
         const isAdminCheckbox = `
                 <input type="checkbox" name="admins" value="${escapeHtml(
                   user.name
                 )}" 
                     ${user.isAdmin ? "checked" : ""} 
-                    ${user.name === adminUserName ? "disabled" : ""}>
+                    ${user.isPrimeAdmin ? "disabled" : ""}>
             `;
 
         return `<tr>
-                        <td>${escapeHtml(user.name)}</td>
+                        <td>${escapeHtml(user.name)}${
+          user.isPrimeAdmin ? " (Prime)" : ""
+        }</td>
                         <td>${escapeHtml(lastLoginStr)}</td>
                         <td align="center">${isAdminCheckbox}</td>
                         <td>${deleteButtonHtml}</td>

@@ -54,8 +54,35 @@ function renderBuddyListPage(
       .join("");
   };
 
-  const onlineFriends = createLinks(onlineFriendKeys, false);
-  const offlineFriends = createLinks(offlineFriendKeys, true);
+  const friendGroups = [
+    { id: "student", name: "Students" },
+    { id: "townie_alumni", name: "Townies/Alumni" },
+    { id: "online", name: "Online Friends" },
+  ];
+
+  let friendsHtml = "";
+  friendGroups.forEach((groupInfo) => {
+    // Elion is special and should be handled with the 'online' group visually, but is exempt from logic.
+    const groupPersonas = FRIEND_PERSONAS.filter(
+      (p) => p.group === groupInfo.id
+    );
+    if (groupPersonas.length === 0) return;
+
+    const onlineInGroup = groupPersonas
+      .map((p) => p.key)
+      .filter((key) => onlineFriendKeys.includes(key));
+    const offlineInGroup = groupPersonas
+      .map((p) => p.key)
+      .filter((key) => offlineFriendKeys.includes(key));
+
+    if (onlineInGroup.length > 0 || offlineInGroup.length > 0) {
+      friendsHtml += `<div class="buddy-group">${escapeHtml(
+        groupInfo.name
+      )}</div>`;
+      friendsHtml += createLinks(onlineInGroup, false);
+      friendsHtml += createLinks(offlineInGroup, true);
+    }
+  });
 
   const botKeys = UTILITY_BOTS.map((b) => b.key);
   const botLinks = createLinks(botKeys);
@@ -106,9 +133,7 @@ function renderBuddyListPage(
             </td></tr>
             <tr><td id="buddy-list-container">
                 <div id="buddy-list">
-                    <div class="buddy-group">Friends</div>
-                    ${onlineFriends}
-                    ${offlineFriends}
+                    ${friendsHtml}
                     <div class="buddy-group">Bots</div>
                     ${botLinks}
                 </div>

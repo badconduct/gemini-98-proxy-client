@@ -8,7 +8,7 @@ const {
   renderChatWindowPage,
   renderApologyPage,
   renderFilesPage,
-} = require("../views/renderer");
+} = require("../views/appRenderer");
 const { getTimestamp, clamp } = require("../lib/utils");
 const { readProfile, writeProfile } = require("../lib/state-manager");
 const aiLogic = require("../lib/ai-logic");
@@ -258,7 +258,6 @@ const postChatMessage = async (req, res) => {
   const isBlocked =
     worldState.moderation[friendKey] &&
     worldState.moderation[friendKey].blocked;
-  const isFriend = FRIEND_PERSONAS.some((p) => p.key === friendKey);
   const showScores = req.session.showScores || false;
 
   if (!prompt || !prompt.trim() || isBlocked) {
@@ -278,118 +277,6 @@ const postChatMessage = async (req, res) => {
 
   try {
     let reply = "";
-
-    if (isFriend && worldState.userScores[friendKey] === 100) {
-      const intentionPrompt = aiLogic.generateImageIntentionPrompt(
-        prompt.trim()
-      );
-      const intentionResponse = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-04-17",
-        contents: intentionPrompt,
-        config: { responseMimeType: "application/json" },
-      });
-
-      let jsonStr = intentionResponse.text.trim();
-      const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
-      const match = jsonStr.match(fenceRegex);
-      if (match && match[2]) {
-        jsonStr = match[2].trim();
-      }
-      const intentionResult = JSON.parse(jsonStr);
-
-      if (intentionResult.isImageRequest) {
-        const jobId = uuidv4();
-        global.imageJobs[jobId] = { status: "pending" };
-        generateImageInBackground(jobId, persona, userName);
-
-        history += `\n\n${persona.name}: (${getTimestamp()}) Yeah, hold on...`;
-        history += `\n\nSystem: (${getTimestamp()}) ${
-          persona.name
-        } is taking a picture. This might take a moment. The window will refresh automatically.`;
-
-        worldState.chatHistories[friendKey] = history;
-        writeProfile(userName, worldState);
-
-        const metaRefreshTag = `<meta http-equiv="refresh" content="15; URL=/check-image?jobId=${jobId}&friend=${friendKey}">`;
-
-        return res.send(
-          renderChatWindowPage({
-            persona,
-            worldState,
-            history,
-            metaRefreshTag,
-            showScores,
-          })
-        );
-      }
-    }
-
-    const personaIsFriendForModeration = FRIEND_PERSONAS.some(
-      (p) => p.key === friendKey && p.key !== "elion_mystic"
-    );
-
-    if (personaIsFriendForModeration) {
-      const moderationPrompt = `You are a content moderator...`; // Remainder is the same
-      const moderationResponse = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-04-17",
-        contents: moderationPrompt,
-        config: { responseMimeType: "application/json" },
-      });
-      let jsonStr = moderationResponse.text.trim();
-      const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
-      const match = jsonStr.match(fenceRegex);
-      if (match && match[2]) {
-        jsonStr = match[2].trim();
-      }
-      const modResult = JSON.parse(jsonStr);
-
-      if (modResult.inappropriate === true) {
-        const currentUserScore = worldState.userScores[friendKey];
-        let penalty = 0;
-        if (currentUserScore === 100) {
-          if (worldState.moderation[friendKey].warning) {
-            penalty = -10;
-            reply = "I warned you... a real friend wouldn't talk like that.";
-            worldState.moderation[friendKey].warning = false;
-          } else {
-            reply = `Whoa, ${worldState.realName}... I don't like talking about stuff like that. Let's not, okay?`;
-            worldState.moderation[friendKey].warning = true;
-          }
-        } else {
-          penalty = -20;
-          reply = "Yuk, I'm not talking about that. That's gross.";
-        }
-
-        if (penalty !== 0) {
-          worldState.userScores[friendKey] = clamp(
-            currentUserScore + penalty,
-            0,
-            100
-          );
-        }
-
-        if (worldState.userScores[friendKey] <= 0) {
-          worldState.moderation[friendKey].blocked = true;
-          history = `System: (${getTimestamp()}) You have been blocked by ${
-            persona.name
-          }.`;
-        } else {
-          history += `\n\n${persona.name}: (${getTimestamp()}) ${reply}`;
-        }
-        worldState.chatHistories[friendKey] = history;
-        writeProfile(userName, worldState);
-        return res.send(
-          renderChatWindowPage({
-            persona,
-            worldState,
-            history,
-            isOffline: false,
-            isBlocked: worldState.moderation[friendKey].blocked,
-            showScores,
-          })
-        );
-      }
-    }
 
     const contents = buildHistoryForApi(history, userName);
     if (contents.length > 0) {
@@ -428,6 +315,35 @@ const postChatMessage = async (req, res) => {
           jsonStr = match[2].trim();
         }
         const parsed = JSON.parse(jsonStr);
+
+        if (parsed.isImageRequest) {
+          const jobId = uuidv4();
+          global.imageJobs[jobId] = { status: "pending" };
+          generateImageInBackground(jobId, persona, userName);
+
+          history += `\n\n${
+            persona.name
+          }: (${getTimestamp()}) Yeah, hold on...`;
+          history += `\n\nSystem: (${getTimestamp()}) ${
+            persona.name
+          } is taking a picture. This might take a moment. The window will refresh automatically.`;
+
+          worldState.chatHistories[friendKey] = history;
+          writeProfile(userName, worldState);
+
+          const metaRefreshTag = `<meta http-equiv="refresh" content="15; URL=/check-image?jobId=${jobId}&friend=${friendKey}">`;
+
+          return res.send(
+            renderChatWindowPage({
+              persona,
+              worldState,
+              history,
+              metaRefreshTag,
+              showScores,
+            })
+          );
+        }
+
         reply = parsed.reply || "sry, my mind is blank rn...";
 
         const change = parseInt(parsed.relationshipChange, 10) || 0;
@@ -435,13 +351,14 @@ const postChatMessage = async (req, res) => {
           const oldScore = worldState.userScores[friendKey];
           worldState.userScores[friendKey] = clamp(oldScore + change, 0, 100);
         }
+        history += `\n\n${persona.name}: (${getTimestamp()}) ${reply}`;
       } else {
         reply = response.text || "sry, my mind is blank rn...";
         if (persona.key === "nostalgia_bot") {
           reply = reply.replace(/[\r\n]+/g, " ").trim();
         }
+        history += `\n\n${persona.name}: (${getTimestamp()}) ${reply}`;
       }
-      history += `\n\n${persona.name}: (${getTimestamp()}) ${reply}`;
     }
   } catch (err) {
     console.error("API call or history processing error:", err);

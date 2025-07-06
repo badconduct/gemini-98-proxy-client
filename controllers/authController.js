@@ -14,7 +14,8 @@ const { verifyPassword } = require("../lib/auth");
 
 const getLauncherPage = (req, res) => {
   const profiles = listProfiles();
-  res.send(renderLauncherPage(profiles));
+  // Pass the error from query params if a login failed
+  res.send(renderLauncherPage(profiles, req.query.error));
 };
 
 const getNewUserPage = (req, res) => {
@@ -23,49 +24,74 @@ const getNewUserPage = (req, res) => {
 };
 
 const postCreateUser = (req, res) => {
-  const { userName, realName, password } = req.body;
+  const { userName, realName, password, age, sex, location } = req.body;
+  const profiles = listProfiles();
+  const isFirstUser = profiles.length === 0;
+
   if (
     !userName ||
     !userName.trim() ||
     !realName ||
     !realName.trim() ||
     !password ||
-    !password.trim()
+    !password.trim() ||
+    !age ||
+    !sex ||
+    !location ||
+    !location.trim()
   ) {
-    const profiles = listProfiles();
-    return res.send(
-      renderNewUserPage("All fields are required.", profiles.length === 0)
-    );
+    return res.send(renderNewUserPage("All fields are required.", isFirstUser));
   }
 
   if (!/^[a-zA-Z0-9_-]+$/.test(userName)) {
-    const profiles = listProfiles();
     return res.send(
       renderNewUserPage(
         "User Name can only contain letters, numbers, underscores, and hyphens.",
-        profiles.length === 0
+        isFirstUser
       )
+    );
+  }
+
+  const ageNum = parseInt(age, 10);
+  if (isNaN(ageNum) || ageNum < 1 || ageNum > 99) {
+    return res.send(
+      renderNewUserPage("Age must be a number between 1 and 99.", isFirstUser)
+    );
+  }
+
+  if (sex !== "M" && sex !== "F") {
+    return res.send(
+      renderNewUserPage("Invalid selection for Sex.", isFirstUser)
+    );
+  }
+
+  if (location.trim().length > 50) {
+    return res.send(
+      renderNewUserPage("Location cannot exceed 50 characters.", isFirstUser)
     );
   }
 
   if (profileExists(userName)) {
-    const profiles = listProfiles();
     return res.send(
       renderNewUserPage(
         `The user name "${userName}" is already taken.`,
-        profiles.length === 0
+        isFirstUser
       )
     );
   }
 
-  const profiles = listProfiles();
-  const isAdmin = profiles.length === 0;
+  const isAdmin = isFirstUser;
+  const isPrimeAdmin = isFirstUser;
 
   const worldState = generateInitialWorldState(
     userName.trim(),
     realName.trim(),
     password.trim(),
-    isAdmin
+    ageNum,
+    sex,
+    location.trim(),
+    isAdmin,
+    isPrimeAdmin
   );
   writeProfile(userName.trim(), worldState);
 
@@ -75,23 +101,18 @@ const postCreateUser = (req, res) => {
 const postLogin = (req, res) => {
   const { userName, password } = req.body;
   if (!userName || !password) {
-    const profiles = listProfiles();
-    return res.send(
-      renderLauncherPage(profiles, "Username and password are required.")
-    );
+    return res.redirect("/?error=Username and password are required.");
   }
 
   let worldState = readProfile(userName);
-  // For backward compatibility, allow login to old profiles without passwords
+  // For backward compatibility, allow login to old profiles without passwords.
+  // For new profiles, worldState.password will always exist.
   const isPasswordCorrect =
     worldState &&
     (!worldState.password || verifyPassword(worldState.password, password));
 
   if (!isPasswordCorrect) {
-    const profiles = listProfiles();
-    return res.send(
-      renderLauncherPage(profiles, "Invalid username or password.")
-    );
+    return res.redirect("/?error=Invalid username or password.");
   }
 
   // Check for developer options cookie (applied during login)
@@ -103,12 +124,20 @@ const postLogin = (req, res) => {
       // Handle Profile Reset
       if (options.resetProfile) {
         console.log(`[OPTIONS] Resetting profile for ${userName}`);
-        const isAdmin = worldState.isAdmin || false; // Preserve admin status on reset
+        const isAdmin = worldState.isAdmin || false;
+        const isPrimeAdmin = worldState.isPrimeAdmin || false; // Preserve prime admin status on reset
+        const age = worldState.age;
+        const sex = worldState.sex;
+        const location = worldState.location;
         worldState = generateInitialWorldState(
           worldState.userName,
           worldState.realName,
           password,
-          isAdmin
+          age,
+          sex,
+          location,
+          isAdmin,
+          isPrimeAdmin
         );
         profileModified = true;
       }
@@ -154,10 +183,7 @@ const postLogin = (req, res) => {
   req.session.save((err) => {
     if (err) {
       console.error("Session save error:", err);
-      const profiles = listProfiles();
-      return res.send(
-        renderLauncherPage(profiles, "A server error occurred during login.")
-      );
+      return res.redirect(`/?error=A server error occurred during login.`);
     }
     res.send(renderLoginSuccessPage());
   });

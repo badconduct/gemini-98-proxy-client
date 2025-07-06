@@ -1,10 +1,10 @@
 # 💬 ICQ98 Proxy
 
-> 🧠 Powered by Gemini + local AI logic  
-> 🎨 Runs remotely in your Windows 98SE-compatible browser (with cookies for state)  
-> 📟 Feels like 1998—but watches you like it's 2025
+> 🧠 Powered by Gemini + a dynamic social simulation engine
+> 🔐 Secure multi-profile accounts with server-side state
+> 📟 Feels like 1998—but with AI that knows who you are
 
-ICQ98 Proxy is a nostalgic chat simulator that brings 90s internet social life back to your desktop—complete with AI-powered friends, an in-browser buddy list, and full compatibility with retro browsers. It feels like you're back on dial-up... but the conversations are way smarter.
+ICQ98 Proxy is a nostalgic chat simulator that brings 90s internet social life back to your desktop. It's a multi-user, password-protected application with AI-powered friends, an in-browser buddy list, and full compatibility with retro browsers. It feels like you're back on dial-up... but the conversations are way smarter.
 
 ---
 
@@ -23,7 +23,7 @@ To run the AI-enabled server:
 The front-end is fully retro-compatible:
 
 - Works on **Internet Explorer 6**, **Firefox 2.0+**, or modern browsers
-- Requires only basic JavaScript (no React, no fetch, no ES6)
+- Requires only basic JavaScript (ES3)
 - Optimized for **640x480–1024x768** screen sizes
 
 > Access the server locally or remotely from a vintage PC for the full Y2K-era experience.
@@ -32,75 +32,75 @@ The front-end is fully retro-compatible:
 
 ## 🧠 Features
 
-- **AI Friends** with distinct personalities, interests, and relationship scores
-- **Dynamic Conversations** powered by Gemini and custom server-side logic
-- **Buddy List** showing who's online, offline, or blocked
-- **Relationship Engine** that evolves based on your choices
-- **Apology System** if things go wrong (and they will)
-- **Fully Cookie-Based State** — no login needed, just show up and chat
-- **No Front-End Frameworks** — works in Netscape 4 or IE6, no webpack, no BS
+- **Secure, File-Based Profiles:** No more cookies for state. Every user has a password-protected profile saved securely on the server.
+- **Multi-Profile Launcher System:** The application starts with a login portal. Log in to an existing account or create a new one. The buddy list then "launches" in a new window.
+- **Administrator Role & User Management:** The first user created becomes the prime administrator, who can view all users, grant/revoke admin status, and delete accounts.
+- **Advanced Social & Age Dynamics:**
+  - **Social Groups:** Friends are organized into distinct groups (Students, Townies/Alumni, Online Friends) with their own social rules.
+  - **Dynamic Relationships:** Your age and social group determine your starting relationships with other characters.
+  - **Personalized AI:** The AI's personality and behavior change dramatically based on your age, social status, and conversation history.
+- **Deep AI Personas:** Chat with over a dozen unique AI friends, each with distinct personalities, interests, and schedules.
+- **No Front-End Frameworks:** Works in Netscape 4 or IE6, no webpack, no BS.
 
 ---
 
-## 🔐 Moderation System
+## 🤖 The Social Simulation Engine
 
-Your relationship score determines how much you can get away with:
+The core of the application is a dynamic rules engine that generates unique system instructions for the Gemini API in real-time.
 
-- Start at **5/10** with most characters
-- Say something sketchy and:
-  - If you’re **not best friends**, lose 2 points and get a warning
-  - If you’re **best friends (10/10)**, get a warning first, then a softer -1 penalty
-- Drop to **0** and you’re blocked
-- Apologize to potentially earn a second chance (score resets to 1/10)
-
-> Characters like **Elion** and **utility bots** are immune to this system—they know too much.
+- **Context is King:** The AI is given deep context about your character (age, sex, location, social role) and its own character (personality, interests, relationships with other AIs).
+- **Age-Based Logic:** The simulation's rules change based on your age.
+  - **Ages 14-19 (Student):** You're an insider with other students, starting with higher relationship scores.
+  - **Ages 20-39 (Townie/Alumni):** You have a natural rapport with the other townies.
+  - **Ages <=13 or >=40 (Online Friend):** AI friends will be suspicious of you. If you're under 14, they'll become patronizing. If you're over 40, students will find you "creepy" and their opinion of you will permanently decrease with every interaction.
+- **Relationship Score:** Your conversations directly impact your relationship score with each friend, unlocking different conversational paths and behaviors.
 
 ---
 
 ## 🚀 Getting Started
 
-🚀 Getting Started
+1.  **Clone this repo**
 
-    Clone this repo
+    ```bash
+    git clone https://github.com/yourusername/icq98-proxy.git
+    cd icq98-proxy
+    ```
 
-git clone https://github.com/yourusername/icq98-proxy.git
-cd icq98-proxy
+2.  **Install dependencies**
 
-Install dependencies
+    ```bash
+    npm install
+    ```
 
-npm install
+3.  **Add your Gemini API key**
+    Create a `.env` file in the project root with your API key and a session secret:
 
-Add your Gemini API key
-Create a .env file in the project root:
+    ```
+    API_KEY=your-gemini-api-key
+    SESSION_SECRET=a-long-random-string-for-security
+    ```
 
-API_KEY=your-gemini-api-key
+4.  **Start the server**
 
-Start the server
+    ```bash
+    node server.js
+    ```
 
-node server.js
+5.  **Open the site & Create Your Admin Account**
 
-Open the site
+    - **🖥️ Modern browser:** `http://localhost:3000`
+    - **🧓 Retro browser (e.g., IE6 on Win98):** `http://<your-local-ip>:3000`
 
-    🖥️ Modern browser:
-    http://localhost:3000
+    The first account you create will automatically become the permanent, undeletable **Prime Administrator**.
 
-    🧓 Retro browser (e.g., IE6 on Windows 98):
-    Use your LAN IP:
-    http://<your-local-ip>:3000
-    Example: http://192.168.1.100:3000
+---
 
-🎁 Extras
+## ⚠️ Security & Deployment
 
-    Built-in personalities are fully customizable via config/personas.js
+This application is designed for personal or private group use. The current registration system is open by default. **If you plan to deploy this to a public server, it is strongly recommended that you implement an invitation code system** to prevent abuse of your API key.
 
-    Assets use base64 inlining for maximum compatibility
+---
 
-    Optional pixel-perfect IE6 styling via views/renderer.js
+## 📎 Clippy Says
 
-⚠️ Disclaimer
-
-This is a simulation. AI responses may reflect the quirks, interests, or boundaries of fictional characters. Nothing is recorded—except your regrets.
-
-📎 Clippy Says
-
-    "It looks like you're trying to relive the late 90s. Would you like help with that?"
+> "It looks like you're trying to build a complex social simulation. Would you like help with that?"

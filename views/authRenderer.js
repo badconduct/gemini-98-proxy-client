@@ -6,31 +6,24 @@ function renderLauncherPage(profiles = [], error = null) {
   const title = "Gemini 98 - Launcher";
   const header = "ICQ98 Network Login";
 
-  let formContent;
-  if (profiles.length > 0) {
-    const options = profiles
-      .map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
-      .join("");
-    formContent = `
-            <form action="/login" method="POST">
-                <table class="form-table" cellpadding="0" cellspacing="0" style="width: 100%;">
-                    <tr>
-                        <td style="text-align: right; font-weight: bold; width: 100px;"><label for="userName-select">Profile:</label></td>
-                        <td><select id="userName-select" name="userName" style="width: 100%; box-sizing: border-box;">${options}</select></td>
-                    </tr>
-                    <tr>
-                        <td style="text-align: right; font-weight: bold; width: 100px;"><label for="password-input">Password:</label></td>
-                        <td><input type="password" id="password-input" name="password" required style="width: 100%; box-sizing: border-box;" /></td>
-                    </tr>
-                </table>
-                <div class="button-container">
-                    <input type="submit" value="Login">
-                </div>
-            </form>
-        `;
-  } else {
-    formContent = `<div style="text-align: center; color: #808080; margin: 20px;">No profiles found. Please create one.</div>`;
-  }
+  // The login form is now always a text input for security.
+  const formContent = `
+        <form action="/login" method="POST">
+            <table class="form-table" cellpadding="0" cellspacing="0" style="width: 100%;">
+                <tr>
+                    <td style="text-align: right; font-weight: bold; width: 100px;"><label for="userName-input">User Name:</label></td>
+                    <td><input type="text" id="userName-input" name="userName" required style="width: 100%; box-sizing: border-box;" autocomplete="off" /></td>
+                </tr>
+                <tr>
+                    <td style="text-align: right; font-weight: bold; width: 100px;"><label for="password-input">Password:</label></td>
+                    <td><input type="password" id="password-input" name="password" required style="width: 100%; box-sizing: border-box;" /></td>
+                </tr>
+            </table>
+            <div class="button-container">
+                <input type="submit" value="Login">
+            </div>
+        </form>
+    `;
 
   const newUserButtonText =
     profiles.length === 0 ? "Create Administrator" : "New Profile";
@@ -61,6 +54,9 @@ function renderNewUserPage(error = null, isFirstUser = false) {
                 <tr><td style="text-align: right; width: 100px;"><label for="userName-input">User Name:</label></td><td><input type="text" id="userName-input" name="userName" autocomplete="off" required style="width: 100%; box-sizing: border-box;" /></td></tr>
                 <tr><td style="text-align: right; width: 100px;"><label for="realName-input">Real Name:</label></td><td><input type="text" id="realName-input" name="realName" autocomplete="off" required style="width: 100%; box-sizing: border-box;" /></td></tr>
                 <tr><td style="text-align: right; width: 100px;"><label for="password-input">Password:</label></td><td><input type="password" id="password-input" name="password" required style="width: 100%; box-sizing: border-box;" /></td></tr>
+                <tr><td style="padding-top: 10px; text-align: right; width: 100px;"><label for="age-input">A/S/L - Age:</label></td><td style="padding-top: 10px;"><input type="text" id="age-input" name="age" required style="width: 50px;" maxlength="2" /></td></tr>
+                <tr><td style="text-align: right; width: 100px;"><label for="sex-input">Sex:</label></td><td><select id="sex-input" name="sex"><option value="M">M</option><option value="F">F</option></select></td></tr>
+                <tr><td style="text-align: right; width: 100px;"><label for="location-input">Location:</label></td><td><input type="text" id="location-input" name="location" autocomplete="off" required style="width: 100%; box-sizing: border-box;" maxlength="50" /></td></tr>
             </table>
           <div class="button-container">
               <input type="submit" value="${submitText}">

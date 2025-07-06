@@ -20,6 +20,7 @@ const getUsersPage = (req, res) => {
         name: profile ? profile.userName : name,
         lastLogin: profile ? profile.lastLogin : null,
         isAdmin: profile ? profile.isAdmin : false,
+        isPrimeAdmin: profile ? profile.isPrimeAdmin : false,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -34,18 +35,17 @@ const postUpdateUsers = (req, res) => {
     ? [req.body.admins]
     : [];
   const currentAdmin = req.session.userName;
-
-  // Ensure the current admin cannot be demoted through this form
-  if (!designatedAdmins.includes(currentAdmin)) {
-    designatedAdmins.push(currentAdmin);
-  }
-
   const allUserNames = listProfiles();
 
   allUserNames.forEach((userName) => {
     const profile = readProfile(userName);
     if (profile) {
-      const shouldBeAdmin = designatedAdmins.includes(userName);
+      let shouldBeAdmin = designatedAdmins.includes(userName);
+      // The prime admin MUST always be an admin. This is the authoritative check.
+      if (profile.isPrimeAdmin) {
+        shouldBeAdmin = true;
+      }
+
       if (profile.isAdmin !== shouldBeAdmin) {
         profile.isAdmin = shouldBeAdmin;
         writeProfile(userName, profile);
@@ -67,6 +67,16 @@ const postDeleteUser = (req, res) => {
     return res.status(400).send("No user specified for deletion.");
   }
 
+  const profileToDelete = readProfile(userNameToDelete);
+
+  if (profileToDelete && profileToDelete.isPrimeAdmin) {
+    console.error(
+      `[SECURITY] Admin ${adminUserName} attempted to delete prime admin ${userNameToDelete}. Operation blocked.`
+    );
+    return res.status(403).send("The prime administrator cannot be deleted.");
+  }
+
+  // This check remains useful for non-prime admins trying to delete themselves.
   if (userNameToDelete === adminUserName) {
     return res
       .status(403)
@@ -83,16 +93,15 @@ const postDeleteUser = (req, res) => {
   try {
     if (fs.existsSync(profilePath)) {
       // First, read the profile to get a list of associated images for cleanup
-      const worldState = readProfile(userNameToDelete);
       if (
-        worldState &&
-        worldState.receivedFiles &&
-        worldState.receivedFiles.length > 0
+        profileToDelete &&
+        profileToDelete.receivedFiles &&
+        profileToDelete.receivedFiles.length > 0
       ) {
         console.log(
-          `[ADMIN] Deleting ${worldState.receivedFiles.length} image(s) for user ${userNameToDelete}.`
+          `[ADMIN] Deleting ${profileToDelete.receivedFiles.length} image(s) for user ${userNameToDelete}.`
         );
-        worldState.receivedFiles.forEach((file) => {
+        profileToDelete.receivedFiles.forEach((file) => {
           const imageFilename = path.basename(file.url);
           const imagePath = path.resolve(
             __dirname,
