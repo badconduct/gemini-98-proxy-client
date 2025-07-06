@@ -345,6 +345,45 @@ const postChatMessage = async (req, res) => {
           );
         }
 
+        // --- Gossip Mechanic ---
+        if (parsed.userRevealedAge === true) {
+          console.log(
+            `[SOCIAL] User ${userName} revealed their true age to ${persona.name}.`
+          );
+          // 1. Update the persona who was told directly.
+          worldState.ageKnowledge[friendKey] = {
+            knows: true,
+            source: "user",
+          };
+
+          // 2. Propagate the knowledge if the persona is in a gossip-enabled group.
+          const sourcePersona = FRIEND_PERSONAS.find(
+            (p) => p.key === friendKey
+          );
+          if (
+            sourcePersona &&
+            (sourcePersona.group === "student" ||
+              sourcePersona.group === "townie_alumni")
+          ) {
+            const gossipGroup = FRIEND_PERSONAS.filter(
+              (p) =>
+                p.group === sourcePersona.group && p.key !== sourcePersona.key
+            );
+            console.log(
+              `[GOSSIP] ${sourcePersona.name} is telling ${gossipGroup.length} other people in their group.`
+            );
+            gossipGroup.forEach((member) => {
+              // Don't overwrite if they already know from a more direct source
+              if (!worldState.ageKnowledge[member.key]) {
+                worldState.ageKnowledge[member.key] = {
+                  knows: true,
+                  source: friendKey, // The source is the key of the persona who was told.
+                };
+              }
+            });
+          }
+        }
+
         reply = parsed.reply || "sry, my mind is blank rn...";
 
         const change = parseInt(parsed.relationshipChange, 10) || 0;
