@@ -213,7 +213,7 @@ function renderOptionsPage() {
             var relLevel = getCheckedRadioValue('rel-level');
             var options = {
                 showScores: document.getElementById('show-scores').checked,
-                resetProfile: document.getElementById('reset-profile').checked,
+                resetApplication: document.getElementById('reset-application').checked,
                 relationshipLevel: relLevel ? parseInt(relLevel, 10) : -1
             };
             setCookie('icq98_options', JSON.stringify(options), 1);
@@ -248,10 +248,11 @@ function renderOptionsPage() {
         </div>
 
         <div style="border: 1px solid #808080; padding: 10px; margin-bottom: 15px;">
-            <legend style="font-weight: bold;">Profile Management</legend>
+            <legend style="font-weight: bold;">Reset Application</legend>
             <div style="margin-bottom: 10px;">
-                <input type="checkbox" id="reset-profile">
-                <label for="reset-profile">Reset my entire profile on next login (DANGEROUS!)</label>
+                <input type="checkbox" id="reset-application">
+                <label for="reset-application">This will delete all user profiles (DANGEROUS!)</label>
+                <p style="font-size: 11px; color: #505050; margin-top: 5px; margin-left: 20px; margin-bottom: 0;">This will delete all users, including the power admin, and you'll need to start over.</p>
             </div>
         </div>
 

@@ -116,6 +116,12 @@ app.post(
   requireAdmin,
   adminController.postDeleteUser
 );
+app.post(
+  "/admin/reset-user",
+  requireLogin,
+  requireAdmin,
+  adminController.postResetUser
+);
 app.get(
   "/admin/options",
   requireLogin,

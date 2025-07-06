@@ -5,6 +5,7 @@ const {
   listProfiles,
   readProfile,
   writeProfile,
+  generateInitialWorldState,
 } = require("../lib/state-manager");
 
 const getOptionsPage = (req, res) => {
@@ -39,23 +40,50 @@ const postUpdateUsers = (req, res) => {
     : [];
   const currentAdmin = req.session.userName;
   const allUserNames = listProfiles();
+  const userAges = req.body.age || {};
+  const userSexes = req.body.sex || {};
+  const userLocations = req.body.location || {};
 
   allUserNames.forEach((userName) => {
     const profile = readProfile(userName);
-    if (profile) {
-      let shouldBeAdmin = designatedAdmins.includes(userName);
-      // The prime admin MUST always be an admin. This is the authoritative check.
-      if (profile.isPrimeAdmin) {
-        shouldBeAdmin = true;
-      }
+    if (!profile) return;
 
-      if (profile.isAdmin !== shouldBeAdmin) {
-        profile.isAdmin = shouldBeAdmin;
-        writeProfile(userName, profile);
-        console.log(
-          `[ADMIN] Admin status for ${userName} set to ${shouldBeAdmin} by ${currentAdmin}.`
-        );
-      }
+    const newIsAdmin =
+      designatedAdmins.includes(userName) || profile.isPrimeAdmin;
+    const newAge = parseInt(userAges[userName], 10) || profile.age;
+    const newSex = userSexes[userName] || profile.sex;
+    const newLocation = userLocations[userName] || profile.location;
+
+    const aslChanged =
+      newAge !== profile.age ||
+      newSex !== profile.sex ||
+      newLocation !== profile.location;
+    const adminStatusChanged = newIsAdmin !== profile.isAdmin;
+
+    if (aslChanged) {
+      console.log(
+        `[ADMIN] A/S/L change for ${userName} detected by ${currentAdmin}. Resetting profile.`
+      );
+      // A/S/L change triggers a full regeneration.
+      // This will also apply the new admin status.
+      const newWorldState = generateInitialWorldState(
+        profile.userName,
+        profile.realName,
+        profile.password, // Pass the hashed password object
+        newAge,
+        newSex,
+        newLocation,
+        newIsAdmin,
+        profile.isPrimeAdmin
+      );
+      writeProfile(userName, newWorldState);
+    } else if (adminStatusChanged) {
+      console.log(
+        `[ADMIN] Admin status for ${userName} changed to ${newIsAdmin} by ${currentAdmin}.`
+      );
+      // Only admin status changed, no regeneration needed.
+      profile.isAdmin = newIsAdmin;
+      writeProfile(userName, profile);
     }
   });
 
@@ -137,9 +165,44 @@ const postDeleteUser = (req, res) => {
   res.redirect("/admin/users");
 };
 
+const postResetUser = (req, res) => {
+  const { userNameToReset } = req.body;
+  const adminUserName = req.session.userName;
+
+  if (!userNameToReset) {
+    return res.status(400).send("No user specified for reset.");
+  }
+
+  const profile = readProfile(userNameToReset);
+
+  if (profile) {
+    console.log(
+      `[ADMIN] Profile reset for ${userNameToReset} initiated by ${adminUserName}.`
+    );
+    const newWorldState = generateInitialWorldState(
+      profile.userName,
+      profile.realName,
+      profile.password, // Pass the hashed password object
+      profile.age,
+      profile.sex,
+      profile.location,
+      profile.isAdmin,
+      profile.isPrimeAdmin
+    );
+    writeProfile(userNameToReset, newWorldState);
+  } else {
+    console.warn(
+      `[ADMIN] Attempted to reset non-existent user: ${userNameToReset}`
+    );
+  }
+
+  res.redirect("/admin/users");
+};
+
 module.exports = {
   getOptionsPage,
   getUsersPage,
   postUpdateUsers,
   postDeleteUser,
+  postResetUser,
 };

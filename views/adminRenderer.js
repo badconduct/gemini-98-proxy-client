@@ -11,7 +11,8 @@ function renderUsersPage({ users, adminUserName }) {
       .users-table { width: 100%; border-collapse: collapse; }
       .users-table th, .users-table td { border: 1px solid #C0C0C0; padding: 5px; text-align: left; vertical-align: middle; }
       .users-table th { background-color: #E0E0E0; font-weight: bold; }
-      .delete-button { font-size: 10px; padding: 1px 3px; }
+      .users-table input[type="text"], .users-table select { width: 95%; box-sizing: border-box; }
+      .action-button { font-size: 10px; padding: 1px 3px; }
       .action-buttons { text-align: right; margin-top: 10px; padding: 0 10px 10px; }
       .save-button { font-size: 12px; padding: 3px 8px; }
     `;
@@ -27,17 +28,27 @@ function renderUsersPage({ users, adminUserName }) {
         const deleteButtonHtml = user.isPrimeAdmin
           ? ""
           : `
-                <form action="/admin/delete-user" method="POST" style="margin:0;" onsubmit="return confirm('Are you sure you want to permanently delete the user ${escapeHtml(
+                <form action="/admin/delete-user" method="POST" style="display:inline; margin:0;" onsubmit="return confirm('Are you sure you want to permanently delete the user ${escapeHtml(
                   user.name
                 )}? This cannot be undone.');">
                     <input type="hidden" name="userNameToDelete" value="${escapeHtml(
                       user.name
                     )}">
-                    <input type="submit" value="Delete" class="delete-button">
+                    <input type="submit" value="Delete" class="action-button">
                 </form>
             `;
 
-        // Prime admin is always admin and cannot be demoted.
+        const resetButtonHtml = `
+            <form action="/admin/reset-user" method="POST" style="display:inline; margin:0 0 0 4px;" onsubmit="return confirm('Are you sure you want to reset the profile for ${escapeHtml(
+              user.name
+            )}? This will reset their relationships and chat history.');">
+                <input type="hidden" name="userNameToReset" value="${escapeHtml(
+                  user.name
+                )}">
+                <input type="submit" value="Reset Profile" class="action-button">
+            </form>
+            `;
+
         const isAdminCheckbox = `
                 <input type="checkbox" name="admins" value="${escapeHtml(
                   user.name
@@ -51,11 +62,28 @@ function renderUsersPage({ users, adminUserName }) {
           user.isPrimeAdmin ? " (Prime)" : ""
         }</td>
                         <td>${escapeHtml(lastLoginStr)}</td>
-                        <td>${escapeHtml(user.age)}</td>
-                        <td>${escapeHtml(user.sex)}</td>
-                        <td>${escapeHtml(user.location)}</td>
+                        <td><input type="text" name="age[${escapeHtml(
+                          user.name
+                        )}]" value="${escapeHtml(
+          user.age
+        )}" maxlength="2" size="3"></td>
+                        <td>
+                            <select name="sex[${escapeHtml(user.name)}]">
+                                <option value="M" ${
+                                  user.sex === "M" ? "selected" : ""
+                                }>M</option>
+                                <option value="F" ${
+                                  user.sex === "F" ? "selected" : ""
+                                }>F</option>
+                            </select>
+                        </td>
+                        <td><input type="text" name="location[${escapeHtml(
+                          user.name
+                        )}]" value="${escapeHtml(
+          user.location
+        )}" maxlength="50"></td>
                         <td align="center">${isAdminCheckbox}</td>
-                        <td>${deleteButtonHtml}</td>
+                        <td width="150">${deleteButtonHtml} ${resetButtonHtml}</td>
                     </tr>`;
       })
       .join("");
@@ -70,12 +98,12 @@ function renderUsersPage({ users, adminUserName }) {
   const body = `
         <div id="container">
             <form action="/admin/update-users" method="POST">
-                <h1>Registered Users</h1>
+                <h1>User Administration</h1>
                 <div id="users-container">
                     ${usersHtml}
                 </div>
                 <div class="action-buttons">
-                    <input type="submit" value="Save Admin Status" class="save-button">
+                    <input type="submit" value="Save All Changes" class="save-button">
                 </div>
             </form>
         </div>

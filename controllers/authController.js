@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const {
   renderLauncherPage,
   renderNewUserPage,
@@ -121,25 +123,38 @@ const postLogin = (req, res) => {
       const options = JSON.parse(req.cookies.icq98_options);
       let profileModified = false;
 
-      // Handle Profile Reset
-      if (options.resetProfile) {
-        console.log(`[OPTIONS] Resetting profile for ${userName}`);
-        const isAdmin = worldState.isAdmin || false;
-        const isPrimeAdmin = worldState.isPrimeAdmin || false; // Preserve prime admin status on reset
-        const age = worldState.age;
-        const sex = worldState.sex;
-        const location = worldState.location;
-        worldState = generateInitialWorldState(
-          worldState.userName,
-          worldState.realName,
-          password,
-          age,
-          sex,
-          location,
-          isAdmin,
-          isPrimeAdmin
+      // Handle Application Reset (replaces Profile Reset)
+      if (options.resetApplication) {
+        console.log(
+          `[OPTIONS] Full application reset triggered by ${userName}. Deleting all data.`
         );
-        profileModified = true;
+
+        const profilesDir = path.join(__dirname, "..", "profiles");
+        const imagesDir = path.join(
+          __dirname,
+          "..",
+          "public",
+          "generated-images"
+        );
+
+        // Function to clear directory contents
+        const clearDir = (dir) => {
+          if (fs.existsSync(dir)) {
+            fs.readdirSync(dir).forEach((file) =>
+              fs.unlinkSync(path.join(dir, file))
+            );
+          }
+        };
+
+        clearDir(profilesDir);
+        clearDir(imagesDir);
+
+        console.log(
+          `[OPTIONS] All profiles and images deleted. Redirecting to setup.`
+        );
+        res.clearCookie("icq98_options");
+        // We must destroy the session and redirect to the root page, terminating execution here.
+        return req.session.destroy(() => res.redirect("/"));
       }
 
       // Handle Relationship Score Overwrite
