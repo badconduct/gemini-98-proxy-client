@@ -53,9 +53,20 @@ async function postBotMessage(req, res) {
 
     let systemInstruction;
     if (persona.key === "nostalgia_bot") {
+      // Add time context for schedule awareness
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMonth = now.getMonth();
+      const currentDay = now.getDay();
+      const isSummer = currentMonth >= 6 && currentMonth <= 7; // July-Aug
+      const isWeekend = currentDay === 0 || currentDay === 6; // Sun or Sat
+      const dayType = isWeekend ? "weekend" : "weekday";
+      const timeContext = { currentHour, dayType, isSummer };
+
       systemInstruction = aiLogic.generateNostalgiaBotInstruction(
         persona,
-        worldState
+        worldState,
+        timeContext
       );
     } else {
       systemInstruction = persona.systemInstruction.replace(

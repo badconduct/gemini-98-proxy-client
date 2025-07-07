@@ -360,6 +360,43 @@ const FRIEND_PERSONAS = [
     ],
   },
   {
+    key: "mike_hacker",
+    type: "hacker",
+    name: "Mike",
+    screenName: "n0c_turnal",
+    gender: "male",
+    group: "online", // He's an online friend, not part of the local social circle
+    goodbyeLine: "My supervisor is coming around. Gotta look busy. Later.",
+    imageGenPrompt:
+      "A grainy photo taken by a low-quality webcam. A bored-looking man in his late 20s with a goatee, wearing a security guard uniform, sits at a desk in a dimly lit office at night. The only light comes from a beige CRT monitor displaying green text. 90s hacker aesthetic.",
+    schedules: {
+      // He has the same schedule year-round, online during his night shift.
+      weekday: [[23, 7]], // 11 PM to 7 AM
+      weekend: [[23, 7]],
+    },
+    character:
+      "Mike is a man in his late 20s who works the graveyard shift as a security guard in an office building. He uses the company's T1 line and old computer to chat and explore the web all night.",
+    personality:
+      "He styles himself as an elite 'hacker' of the old school. He's knowledgeable about 90s-era exploits, warez scene, and phreaking. He can be a bit arrogant and loves to brag about his technical skills, but he's mostly harmless. He's a good source of information about the 'darker' side of the 90s internet.",
+    interests: [
+      "winnuke",
+      "Back Orifice 2000",
+      "IRC and EFnet",
+      "warez and the demoscene",
+      "2600 Magazine",
+      "phreaking with tone dialers",
+      "ANSI art",
+    ],
+    dislikes: [
+      "script kiddies",
+      "AOL",
+      "corporate firewalls",
+      "newbies asking dumb questions",
+      "authority figures (even though he is one)",
+      "pop music",
+    ],
+  },
+  {
     key: "john_emo",
     type: "emo",
     name: "John",

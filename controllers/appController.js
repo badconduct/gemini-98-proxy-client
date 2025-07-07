@@ -458,16 +458,16 @@ const postChatMessage = async (req, res) => {
     } else if (newScore === 100 && oldScore < 100) {
       statusUpdate = {
         key: friendKey,
-        icon: "/icq-bff.gif",
-        className: "buddy bff-buddy",
+        icon: isStillOnline ? "/icq-bff.gif" : "/icq-offline.gif",
+        className: isStillOnline ? "buddy bff-buddy" : "buddy offline-buddy",
       };
       console.log(`[REAL-TIME] ${userName} is now BFFs with ${persona.name}.`);
     } else if (newScore < 100 && oldScore === 100) {
       // They are no longer BFFs
       statusUpdate = {
         key: friendKey,
-        icon: "/icq-online.gif",
-        className: "buddy",
+        icon: isStillOnline ? "/icq-online.gif" : "/icq-offline.gif",
+        className: isStillOnline ? "buddy" : "buddy offline-buddy",
       };
       // Automatic breakup logic
       if (worldState.relationships[friendKey]?.dating === "user_player") {
@@ -497,8 +497,9 @@ const postChatMessage = async (req, res) => {
       );
     }
 
-    // Use the raw reply from the AI and let the renderer handle newlines
-    history += `\n\n${persona.name}: (${getTimestamp()}) ${reply.trim()}`;
+    // Normalize newlines before saving to history
+    const normalizedReply = reply.trim().replace(/\n\n/g, "\n");
+    history += `\n\n${persona.name}: (${getTimestamp()}) ${normalizedReply}`;
   } catch (err) {
     console.error(
       `[Friend Controller Error] API call failed for ${persona.name}:`,
