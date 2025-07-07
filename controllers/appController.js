@@ -92,13 +92,11 @@ const getBuddyListPage = (req, res) => {
 
   const now = new Date();
   const currentHour = now.getHours();
-  const currentMonth = now.getMonth(); // 0-indexed: Sep=8...June=5
+  const currentMonth = now.getMonth(); // 0-indexed: July=6, Aug=7
   const currentDay = now.getDay();
 
   // Summer is July and August. School year is Sep-June.
-  const isSummer = currentMonth >= 6 && currentMonth <= 7; // July or August
-  const seasonKey = isSummer ? "summer" : "schoolYear";
-
+  const isSummer = currentMonth >= 6 && currentMonth <= 7;
   const isWeekend = currentDay === 0 || currentDay === 6;
   const dayTypeKey = isWeekend ? "weekend" : "weekday";
 
@@ -109,19 +107,32 @@ const getBuddyListPage = (req, res) => {
     }
 
     let isOnlineNow = false;
-    const scheduleSource =
-      persona.schedules[seasonKey] || persona.schedules.schoolYear;
-    const activeSchedule = scheduleSource?.[dayTypeKey] || [];
+    let activeSchedule = [];
+
+    // Robustly determine the active schedule based on the persona's config structure
+    if (persona.schedules.schoolYear && persona.schedules.summer) {
+      // Persona has seasonal schedules
+      const seasonKey = isSummer ? "summer" : "schoolYear";
+      const scheduleSource = persona.schedules[seasonKey];
+      if (scheduleSource) {
+        activeSchedule = scheduleSource[dayTypeKey] || [];
+      }
+    } else {
+      // Persona has a single, year-round schedule
+      activeSchedule = persona.schedules[dayTypeKey] || [];
+    }
 
     if (activeSchedule) {
       for (const window of activeSchedule) {
         const [start, end] = window;
         if (start <= end) {
+          // Same day window (e.g., [9, 17])
           if (currentHour >= start && currentHour < end) {
             isOnlineNow = true;
             break;
           }
         } else {
+          // Overnight window (e.g., [22, 4])
           if (currentHour >= start || currentHour < end) {
             isOnlineNow = true;
             break;
@@ -251,14 +262,22 @@ const postChatMessage = async (req, res) => {
   const currentMonth = now.getMonth();
   const currentDay = now.getDay();
   const isSummer = currentMonth >= 6 && currentMonth <= 7;
-  const seasonKey = isSummer ? "summer" : "schoolYear";
   const isWeekend = currentDay === 0 || currentDay === 6;
   const dayTypeKey = isWeekend ? "weekend" : "weekday";
 
   let isStillOnline = false;
-  const scheduleSource =
-    persona.schedules[seasonKey] || persona.schedules.schoolYear;
-  const activeSchedule = scheduleSource?.[dayTypeKey] || [];
+  let activeSchedule = [];
+
+  // Robustly determine the active schedule
+  if (persona.schedules.schoolYear && persona.schedules.summer) {
+    const seasonKey = isSummer ? "summer" : "schoolYear";
+    const scheduleSource = persona.schedules[seasonKey];
+    if (scheduleSource) {
+      activeSchedule = scheduleSource[dayTypeKey] || [];
+    }
+  } else {
+    activeSchedule = persona.schedules[dayTypeKey] || [];
+  }
 
   if (activeSchedule) {
     for (const window of activeSchedule) {
@@ -358,7 +377,20 @@ const postChatMessage = async (req, res) => {
       );
     }
 
-    if (parsed.startDating === true) {
+    // --- Advanced Dating Logic ---
+    if (parsed.cheatingDetected === true) {
+      console.log(`[SOCIAL] Cheating by ${userName} detected!`);
+      const currentPartners = FRIEND_PERSONAS.filter(
+        (p) => worldState.relationships[p.key]?.dating === "user_player"
+      );
+      currentPartners.forEach((partner) => {
+        worldState.relationships[partner.key].dating = null;
+        worldState.userScores[partner.key] = 10;
+      });
+      history += `\n\nSystem: (${getTimestamp()}) ${
+        parsed.reply || "Word got around that you were seeing multiple people."
+      }`;
+    } else if (parsed.startDating === true) {
       console.log(`[SOCIAL] User ${userName} is now dating ${persona.name}.`);
       const oldPartnerKey = worldState.relationships[persona.key].dating;
       if (oldPartnerKey && oldPartnerKey !== "user_player") {
@@ -372,12 +404,12 @@ const postChatMessage = async (req, res) => {
             0,
             100
           );
-          if (worldState.relationships[oldPartnerKey]) {
-            worldState.relationships[oldPartnerKey].dating = null;
-          }
+          worldState.relationships[oldPartnerKey].dating = null;
+          worldState.relationships[oldPartnerKey].previousPartner = persona.key;
         }
       }
       worldState.relationships[persona.key].dating = "user_player";
+      worldState.relationships[persona.key].previousPartner = oldPartnerKey;
     }
 
     if (parsed.userRevealedAge === true) {
@@ -431,18 +463,42 @@ const postChatMessage = async (req, res) => {
       };
       console.log(`[REAL-TIME] ${userName} is now BFFs with ${persona.name}.`);
     } else if (newScore < 100 && oldScore === 100) {
+      // They are no longer BFFs
       statusUpdate = {
         key: friendKey,
         icon: "/icq-online.gif",
         className: "buddy",
       };
+      // Automatic breakup logic
+      if (worldState.relationships[friendKey]?.dating === "user_player") {
+        console.log(
+          `[SOCIAL] ${persona.name} broke up with ${userName} because their score dropped.`
+        );
+        history += `\n\nSystem: (${getTimestamp()}) ${
+          persona.name
+        } is no longer your partner because your friendship cooled.`;
+        worldState.relationships[friendKey].dating = null;
+        // Check for ex forgiveness
+        const exPartnerKey =
+          worldState.relationships[friendKey].previousPartner;
+        if (exPartnerKey) {
+          worldState.userScores[exPartnerKey] = clamp(
+            worldState.userScores[exPartnerKey] + 40,
+            0,
+            100
+          );
+          console.log(
+            `[SOCIAL] ${exPartnerKey}'s opinion of you has improved.`
+          );
+        }
+      }
       console.log(
         `[REAL-TIME] ${userName} is no longer BFFs with ${persona.name}.`
       );
     }
 
-    const finalReply = reply.trim().replace(/\n\n/g, "\n");
-    history += `\n\n${persona.name}: (${getTimestamp()}) ${finalReply}`;
+    // Use the raw reply from the AI and let the renderer handle newlines
+    history += `\n\n${persona.name}: (${getTimestamp()}) ${reply.trim()}`;
   } catch (err) {
     console.error(
       `[Friend Controller Error] API call failed for ${persona.name}:`,

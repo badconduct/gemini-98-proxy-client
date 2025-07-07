@@ -27,21 +27,24 @@ function renderBuddyListPage(
         const isBFF = score === 100;
 
         let icon;
-        if (isBFF) {
-          icon = "/icq-bff.gif";
-        } else if (isBlocked) {
-          icon = "/icq-blocked.gif";
+        if (useOfflineIcon) {
+          icon = isBlocked ? "/icq-blocked.gif" : "/icq-offline.gif";
         } else {
-          icon = useOfflineIcon ? "/icq-offline.gif" : "/icq-online.gif";
+          icon = isBFF ? "/icq-bff.gif" : "/icq-online.gif";
         }
 
         const statusParam = useOfflineIcon ? "&status=offline" : "";
         const url = `/chat?friend=${persona.key}${statusParam}`;
 
         let cssClass = "buddy";
-        if (isBFF) cssClass += " bff-buddy";
-        else if (isBlocked) cssClass += " blocked-buddy";
-        else if (useOfflineIcon) cssClass += " offline-buddy";
+        if (isBFF && !useOfflineIcon) {
+          // A BFF is only styled special if they are online
+          cssClass += " bff-buddy";
+        } else if (isBlocked) {
+          cssClass += " blocked-buddy";
+        } else if (useOfflineIcon) {
+          cssClass += " offline-buddy";
+        }
 
         const onclick = isBlocked
           ? `window.open('/apology?friend=${persona.key}', 'apology_${persona.key}', 'width=400,height=300,resizable=yes,scrollbars=yes'); return false;`
