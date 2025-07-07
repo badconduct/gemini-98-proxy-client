@@ -2,3 +2,4 @@
 /.env.local
 /profiles/
 /node_modules
+/web.config
