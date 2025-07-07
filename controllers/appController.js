@@ -92,11 +92,11 @@ const getBuddyListPage = (req, res) => {
 
   const now = new Date();
   const currentHour = now.getHours();
-  const currentMonth = now.getMonth(); // 0-indexed: Jan=0, ... July=6, Aug=7
+  const currentMonth = now.getMonth(); // 0-indexed: Sep=8...June=5
   const currentDay = now.getDay();
 
   // Summer is July and August. School year is Sep-June.
-  const isSummer = currentMonth === 6 || currentMonth === 7;
+  const isSummer = currentMonth >= 6 && currentMonth <= 7; // July or August
   const seasonKey = isSummer ? "summer" : "schoolYear";
 
   const isWeekend = currentDay === 0 || currentDay === 6;
@@ -109,7 +109,9 @@ const getBuddyListPage = (req, res) => {
     }
 
     let isOnlineNow = false;
-    const activeSchedule = persona.schedules?.[seasonKey]?.[dayTypeKey] || [];
+    const scheduleSource =
+      persona.schedules[seasonKey] || persona.schedules.schoolYear;
+    const activeSchedule = scheduleSource?.[dayTypeKey] || [];
 
     if (activeSchedule) {
       for (const window of activeSchedule) {
@@ -307,7 +309,29 @@ const postChatMessage = async (req, res) => {
       );
     }
 
-    // --- Gossip Mechanic ---
+    // --- Special state change handlers for BFF features ---
+    if (parsed.startDating === true) {
+      console.log(`[SOCIAL] User ${userName} is now dating ${persona.name}.`);
+      const oldPartnerKey = worldState.relationships[persona.key].dating;
+      if (oldPartnerKey && oldPartnerKey !== "user_player") {
+        const oldPartner = FRIEND_PERSONAS.find((p) => p.key === oldPartnerKey);
+        if (oldPartner) {
+          console.log(
+            `[SOCIAL] ${persona.name} dumped ${oldPartner.name}. Applying -40 relationship penalty.`
+          );
+          worldState.userScores[oldPartnerKey] = clamp(
+            worldState.userScores[oldPartnerKey] - 40,
+            0,
+            100
+          );
+          if (worldState.relationships[oldPartnerKey]) {
+            worldState.relationships[oldPartnerKey].dating = null;
+          }
+        }
+      }
+      worldState.relationships[persona.key].dating = "user_player";
+    }
+
     if (parsed.userRevealedAge === true) {
       console.log(
         `[SOCIAL] User ${userName} revealed their true age to ${persona.name}.`
@@ -339,8 +363,9 @@ const postChatMessage = async (req, res) => {
     const reply = parsed.reply || "sry, my mind is blank rn...";
     const change = parseInt(parsed.relationshipChange, 10) || 0;
 
-    // Friends should speak in single lines/paragraphs. Remove newlines to prevent display bugs.
-    const finalReply = reply.replace(/[\r\n]+/g, " ").trim();
+    // This is the fix. By normalizing newlines here, we prevent the renderer from
+    // incorrectly splitting a single multi-paragraph message into multiple messages.
+    const finalReply = reply.trim().replace(/\n\n/g, "\n");
 
     if (change !== 0) {
       const oldScore = worldState.userScores[friendKey];

@@ -23,9 +23,13 @@ function renderBuddyListPage(
         const isBlocked =
           worldState.moderation[key] && worldState.moderation[key].blocked;
         const useOfflineIcon = isOffline || isBlocked;
+        const score = worldState.userScores[key];
+        const isBFF = score === 100;
 
         let icon;
-        if (isBlocked) {
+        if (isBFF) {
+          icon = "/icq-bff.gif";
+        } else if (isBlocked) {
           icon = "/icq-blocked.gif";
         } else {
           icon = useOfflineIcon ? "/icq-offline.gif" : "/icq-online.gif";
@@ -35,7 +39,8 @@ function renderBuddyListPage(
         const url = `/chat?friend=${persona.key}${statusParam}`;
 
         let cssClass = "buddy";
-        if (isBlocked) cssClass += " blocked-buddy";
+        if (isBFF) cssClass += " bff-buddy";
+        else if (isBlocked) cssClass += " blocked-buddy";
         else if (useOfflineIcon) cssClass += " offline-buddy";
 
         const onclick = isBlocked
@@ -113,6 +118,7 @@ function renderBuddyListPage(
       .buddy-group:first-child { margin-top: 0; }
       .buddy { margin-left: 10px; margin-bottom: 5px; }
       .buddy a { text-decoration: none; color: #000000; }
+      .bff-buddy a { color: #8B008B; font-weight: bold; }
       .offline-buddy a, .blocked-buddy a { color: #808080; }
       .blocked-buddy a { text-decoration: line-through; }
       .buddy img { vertical-align: middle; margin-right: 5px; width: 16px; height: 16px; }
@@ -150,8 +156,13 @@ function renderBuddyListPage(
 }
 
 function renderChatMessagesHtml(history, userName) {
-  return history
-    .split("\n\n")
+  // Regex to split on the newline that precedes a new message header.
+  // This keeps multi-line messages (like poems) intact.
+  const messages = history.split(
+    /\n\n(?=(?:System:|Image:|(?:[^:]+:\s\([^)]+\)\s)))/
+  );
+
+  return messages
     .filter((line) => line.trim())
     .map((line) => {
       const systemMatch = line.match(/^System:\s\(([^)]+)\)\s(.*)$/s);
@@ -247,7 +258,7 @@ function renderChatWindowPage({
       #header img { vertical-align: middle; margin-right: 8px; }
 
       /* Message area styles */
-      #chat-messages { width: 100%; height: 100%; box-sizing: border-box; overflow-y: scroll; border: 2px inset #808080; background-color: #FFFFE1; padding: 10px; text-align: left; }
+      #chat-messages { width: 100%; box-sizing: border-box; overflow-y: scroll; border: 2px inset #808080; background-color: #FFFFE1; padding: 10px; text-align: left; }
       .message { margin-bottom: 5px; white-space: normal; word-wrap: break-word; }
       .message-user { color: #0000FF; text-align: right; }
       .message-bot { color: #FF0000; text-align: left; }
@@ -302,39 +313,36 @@ function renderChatWindowPage({
         (function() {
           function resizeLayout() {
             try {
-              var viewportHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+              var viewportHeight = document.compatMode === 'CSS1Compat' ? document.documentElement.clientHeight : document.body.clientHeight;
               var header = document.getElementById('header-td');
               var form = document.getElementById('form-td');
-              var messages = document.getElementById('messages-td');
+              var chatMessagesDiv = document.getElementById('chat-messages');
 
-              if (!header || !form || !messages) return;
+              if (!header || !form || !chatMessagesDiv) return;
               
               var nonContentHeight = header.offsetHeight + form.offsetHeight;
-              // Add a buffer for table borders and padding
-              var buffer = 15;
+              // Buffer for table borders, padding, etc. to prevent unwanted body scrollbars
+              var buffer = 18; 
               var newHeight = viewportHeight - nonContentHeight - buffer;
 
-              if (newHeight > 50) { // Sanity check to prevent negative heights
-                  messages.style.height = newHeight + 'px';
+              if (newHeight > 50) { // Sanity check for minimum height
+                  chatMessagesDiv.style.height = newHeight + 'px';
               }
-            } catch (e) {}
+            } catch (e) {
+                // Fail silently on old browsers
+            }
           }
 
           function initChat() {
               try {
-                  // Run layout calculation once on load
                   resizeLayout();
-
-                  // Set up resize handler
                   window.onresize = resizeLayout;
 
-                  // Scroll to bottom
                   var chatMessages = document.getElementById('chat-messages');
                   if (chatMessages) {
                       chatMessages.scrollTop = chatMessages.scrollHeight;
                   }
 
-                  // Set up input handler
                   var input = document.getElementById('prompt-input');
                   if (input && !input.disabled) {
                     input.focus();
@@ -356,7 +364,6 @@ function renderChatWindowPage({
               } catch(e) {}
           }
 
-          // Run initialization
           initChat();
         })();
     `;

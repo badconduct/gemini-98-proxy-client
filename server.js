@@ -33,6 +33,7 @@ const ICQ_LOGO_BASE64_DATA = loadAsset("assets/icq-logo.gif.base64");
 const ICQ_ONLINE_BASE64_DATA = loadAsset("assets/icq-online.gif.base64");
 const ICQ_OFFLINE_BASE64_DATA = loadAsset("assets/icq-offline.gif.base64");
 const ICQ_BLOCKED_BASE64_DATA = loadAsset("assets/icq-blocked.gif.base64");
+const ICQ_BFF_BASE64_DATA = loadAsset("assets/icq-bff.gif.base64");
 
 // --- Express App Setup ---
 const app = express();
@@ -176,6 +177,16 @@ app.get("/icq-offline.gif", (req, res) => {
 app.get("/icq-blocked.gif", (req, res) => {
   if (!ICQ_BLOCKED_BASE64_DATA) return res.status(404).send("Asset not found");
   const imgBuffer = Buffer.from(ICQ_BLOCKED_BASE64_DATA, "base64");
+  res.writeHead(200, {
+    "Content-Type": "image/gif",
+    "Content-Length": imgBuffer.length,
+  });
+  res.end(imgBuffer);
+});
+
+app.get("/icq-bff.gif", (req, res) => {
+  if (!ICQ_BFF_BASE64_DATA) return res.status(404).send("Asset not found");
+  const imgBuffer = Buffer.from(ICQ_BFF_BASE64_DATA, "base64");
   res.writeHead(200, {
     "Content-Type": "image/gif",
     "Content-Length": imgBuffer.length,
