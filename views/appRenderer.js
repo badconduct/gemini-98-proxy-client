@@ -52,7 +52,8 @@ function renderBuddyListPage(
           : persona.name;
         const title = persona.screenName ? persona.name : "";
 
-        return `<div class="${cssClass}"><img src="${icon}" alt="Status"><a href="#" title="${escapeHtml(
+        // Add unique IDs for real-time updates
+        return `<div id="buddy-container-${key}" class="${cssClass}"><img id="buddy-icon-${key}" src="${icon}" alt="Status"><a href="#" title="${escapeHtml(
           title
         )}" onclick="${onclick}">${escapeHtml(displayName)}</a></div>`;
       })
@@ -148,10 +149,29 @@ function renderBuddyListPage(
             </td></tr>
         </table>
     `;
+
+  const scripts = `
+      // This function can be called by child windows (chats) to update the main buddy list in real-time.
+      function updateBuddyStatus(friendKey, newIcon, newClassName) {
+          try {
+              var buddyDiv = document.getElementById('buddy-container-' + friendKey);
+              var buddyImg = document.getElementById('buddy-icon-' + friendKey);
+              if (buddyDiv && buddyImg) {
+                  buddyDiv.className = newClassName;
+                  buddyImg.src = newIcon;
+              }
+          } catch(e) {
+              // Fails silently in old browsers
+          }
+      }
+    `;
+
   return renderHtmlPage({
     title: `${escapeHtml(userName)}'s Buddy List`,
     styles,
     body,
+    scripts,
+    metaRefreshTag: '<meta http-equiv="refresh" content="60">', // Refresh every 60 seconds
   });
 }
 
@@ -214,6 +234,7 @@ function renderChatWindowPage({
   isBlocked = false,
   metaRefreshTag = "",
   showScores = false,
+  statusUpdate = null, // New parameter for real-time updates
 }) {
   const { userName } = worldState;
   const friendKey = persona.key;
@@ -309,7 +330,7 @@ function renderChatWindowPage({
         </tr>
       </table>
     `;
-  const script = `
+  let script = `
         (function() {
           function resizeLayout() {
             try {
@@ -367,6 +388,17 @@ function renderChatWindowPage({
           initChat();
         })();
     `;
+
+  if (statusUpdate) {
+    script += `
+        try {
+            if (window.opener && !window.opener.closed && typeof window.opener.updateBuddyStatus === 'function') {
+                window.opener.updateBuddyStatus('${statusUpdate.key}', '${statusUpdate.icon}', '${statusUpdate.className}');
+            }
+        } catch(e) {}
+      `;
+  }
+
   return renderHtmlPage({
     title: `Chat with ${escapeHtml(persona.name)}`,
     styles,

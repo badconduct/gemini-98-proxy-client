@@ -6,6 +6,7 @@ const FRIEND_PERSONAS = [
     screenName: "QB_King7",
     gender: "male",
     group: "student",
+    goodbyeLine: "Dad needs the phone line, gotta bounce.",
     imageGenPrompt:
       "A slightly blurry, flash-lit photo of a 17-year-old high school quarterback with a confident smirk, taking a selfie in a messy locker room mirror. He's wearing his football jersey. 90s aesthetic, shot on a cheap digital camera.",
     schedules: {
@@ -55,6 +56,7 @@ const FRIEND_PERSONAS = [
     screenName: "xGothQueenx",
     gender: "female",
     group: "student",
+    goodbyeLine: "Whatever. My mom wants to use the phone. Later. -_-",
     imageGenPrompt:
       "A grainy, black and white, high-angle selfie of a 16-year-old goth girl with dark lipstick, looking serious. She's in her bedroom, which is lit by a single lamp and has posters for The Cure and Nine Inch Nails on the wall. 90s aesthetic, moody lighting.",
     schedules: {
@@ -107,6 +109,8 @@ const FRIEND_PERSONAS = [
     screenName: "WarezMaster",
     gender: "male",
     group: "student",
+    goodbyeLine:
+      "My download is finished. I must analyze the data payload. Farewell.",
     imageGenPrompt:
       "A low-quality, flash-lit photo of a 17-year-old nerdy boy with glasses, taking a selfie in the mirror of his messy basement bedroom. The room is filled with computer parts, open PC cases, and anime posters. 90s aesthetic.",
     schedules: {
@@ -160,6 +164,7 @@ const FRIEND_PERSONAS = [
     screenName: "OMG_Tiff",
     gender: "female",
     group: "student",
+    goodbyeLine: "OMG my dad is like, SO mad I'm on the phone. TTYL!",
     imageGenPrompt:
       "A bright, flash-heavy photo of a popular 16-year-old girl making a duckface, taking a selfie in her clean, pink-themed bedroom mirror. She's wearing a trendy top and a choker necklace. A Backstreet Boys poster is on the wall. 90s aesthetic.",
     schedules: {
@@ -206,6 +211,7 @@ const FRIEND_PERSONAS = [
     screenName: "Sk8er_Boi",
     gender: "male",
     group: "student",
+    goodbyeLine: "My buddy just showed up, we're gonna go skate. Peace.",
     imageGenPrompt:
       "A low-angle selfie taken with a fisheye lens effect, showing a 17-year-old skater boy in a garage. He's wearing a band t-shirt and a beanie. Skateboards are leaning against the wall behind him. 90s skate video aesthetic, slightly distorted.",
     schedules: {
@@ -254,6 +260,7 @@ const FRIEND_PERSONAS = [
     screenName: "PLUR_Vibes",
     gender: "female",
     group: "student",
+    goodbyeLine: "I feel my energy fading, time to recharge. PLUR! :)",
     imageGenPrompt:
       "A colorful, slightly blurry selfie of a 19-year-old girl with brightly colored hair and kandi bracelets on her arms. She is smiling widely in her room, which is lit by a lava lamp and blacklights, making her neon clothes glow. 90s rave aesthetic.",
     schedules: {
@@ -306,6 +313,7 @@ const FRIEND_PERSONAS = [
     screenName: "LaraCroft_Fan",
     gender: "female",
     group: "online",
+    goodbyeLine: "Gotta get back to my match. See ya, newb.",
     imageGenPrompt:
       "A selfie of a 17-year-old girl with a competitive smirk, taken from a low angle with a webcam mounted on her beige CRT monitor. Her face is illuminated by the screen's glow. In the background, you can see a wall covered in posters from PC Gamer magazine. 90s LAN party aesthetic.",
     schedules: {
@@ -358,6 +366,7 @@ const FRIEND_PERSONAS = [
     screenName: "acoustic_soul",
     gender: "male",
     group: "student",
+    goodbyeLine: "The inspiration has faded... I need to be alone for a while.",
     imageGenPrompt:
       "A grainy, sepia-toned selfie of a sensitive 18-year-old boy, looking thoughtfully away from the camera. He's in his dimly lit bedroom, holding an acoustic guitar. The photo is slightly out of focus. 90s emo zine aesthetic.",
     schedules: {
@@ -410,6 +419,8 @@ const FRIEND_PERSONAS = [
     screenName: "VideoDrome",
     gender: "male",
     group: "townie_alumni",
+    goodbyeLine:
+      "My shift is starting. Another 8 hours of rewinding tapes. Whatever.",
     imageGenPrompt:
       "A flat, unenthusiastic selfie of a 19-year-old slacker taken in the bathroom of a video rental store. He has a bored expression. The lighting is harsh fluorescent. The background shows rows of VHS tapes. 90s Gen-X aesthetic.",
     schedules: {
@@ -466,6 +477,8 @@ const FRIEND_PERSONAS = [
     screenName: "EcoWarrior",
     gender: "female",
     group: "student",
+    goodbyeLine:
+      "Time for the environmental club meeting. The planet needs me!",
     imageGenPrompt:
       "An outdoor selfie of a sincere-looking 17-year-old girl with a friendly smile, taken in a park. She is wearing an earth-toned shirt and a hemp necklace. The photo is taken on a sunny day. 90s activist aesthetic, natural lighting.",
     schedules: {
@@ -512,6 +525,7 @@ const FRIEND_PERSONAS = [
     screenName: "C_Dogg",
     gender: "male",
     group: "townie_alumni",
+    goodbyeLine: "My crew's waiting. Gotta go. Stay fresh.",
     imageGenPrompt:
       "A confident selfie of an 18-year-old man in a FUBU shirt, taken in front of a brick wall with graffiti art. He has a cool, relaxed expression. The photo has the warm, saturated look of 90s film. 90s hip-hop aesthetic.",
     schedules: {
@@ -564,6 +578,7 @@ const FRIEND_PERSONAS = [
     screenName: "DramaGeek",
     gender: "female",
     group: "student",
+    goodbyeLine: "Rehearsal is starting! I have to go be a star! Ciao!",
     imageGenPrompt:
       "An expressive, dramatic selfie of a 16-year-old girl with a big smile, taken backstage at a theatre. She's wearing stage makeup. In the background, you can see costume racks and mirrors with lights around them. 90s theatre kid aesthetic.",
     schedules: {
@@ -610,6 +625,8 @@ const FRIEND_PERSONAS = [
     screenName: "The_Watcher",
     gender: "male",
     group: "online",
+    goodbyeLine:
+      "The signal fades... they are listening. We will connect again when the harmonics align.",
     imageGenPrompt:
       "A heavily distorted, abstract, black and white image created from TV static and visual noise. Vague, unsettling shapes seem to form and un-form within the chaos. It does not look like a person. It looks like a signal from a broken transmission.",
     schedules: {

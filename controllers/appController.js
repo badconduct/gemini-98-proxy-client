@@ -117,12 +117,12 @@ const getBuddyListPage = (req, res) => {
       for (const window of activeSchedule) {
         const [start, end] = window;
         if (start <= end) {
-          if (currentHour >= start && currentHour <= end) {
+          if (currentHour >= start && currentHour < end) {
             isOnlineNow = true;
             break;
           }
         } else {
-          if (currentHour >= start || currentHour <= end) {
+          if (currentHour >= start || currentHour < end) {
             isOnlineNow = true;
             break;
           }
@@ -226,36 +226,85 @@ const postChatMessage = async (req, res) => {
   }
 
   const persona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
+  let history = Buffer.from(historyBase64, "base64").toString("utf8");
+  const showScores = req.session.showScores || false;
 
   if (!persona) {
     return res.status(404).send("Error: Friend not found.");
   }
 
-  // --- Seasonal Context for AI ---
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const isSummer = currentMonth === 6 || currentMonth === 7; // July or August
-
-  let history = Buffer.from(historyBase64, "base64").toString("utf8");
-  const isBlocked =
-    worldState.moderation[friendKey] &&
-    worldState.moderation[friendKey].blocked;
-  const showScores = req.session.showScores || false;
-
-  if (!prompt || !prompt.trim() || isBlocked) {
+  if (!prompt || !prompt.trim() || worldState.moderation[friendKey]?.blocked) {
     return res.send(
       renderChatWindowPage({
         persona,
         worldState,
         history,
-        isOffline: false,
-        isBlocked,
+        isBlocked: worldState.moderation[friendKey]?.blocked,
         showScores,
       })
     );
   }
 
+  // --- Real-time "Gotta Go" logic ---
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMonth = now.getMonth();
+  const currentDay = now.getDay();
+  const isSummer = currentMonth >= 6 && currentMonth <= 7;
+  const seasonKey = isSummer ? "summer" : "schoolYear";
+  const isWeekend = currentDay === 0 || currentDay === 6;
+  const dayTypeKey = isWeekend ? "weekend" : "weekday";
+
+  let isStillOnline = false;
+  const scheduleSource =
+    persona.schedules[seasonKey] || persona.schedules.schoolYear;
+  const activeSchedule = scheduleSource?.[dayTypeKey] || [];
+
+  if (activeSchedule) {
+    for (const window of activeSchedule) {
+      const [start, end] = window;
+      if (start <= end) {
+        if (currentHour >= start && currentHour < end) {
+          isStillOnline = true;
+          break;
+        }
+      } else {
+        if (currentHour >= start || currentHour < end) {
+          isStillOnline = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!isStillOnline) {
+    console.log(`[REAL-TIME] ${persona.name} went offline during chat.`);
+    const goodbye = persona.goodbyeLine || "Hey, I gotta go now.";
+    history += `\n\n${userName}: (${getTimestamp()}) ${prompt.trim()}`;
+    history += `\n\n${persona.name}: (${getTimestamp()}) ${goodbye}`;
+    worldState.chatHistories[friendKey] = history;
+    writeProfile(userName, worldState);
+    const statusUpdate = {
+      key: friendKey,
+      icon: "/icq-offline.gif",
+      className: "buddy offline-buddy",
+    };
+    return res.send(
+      renderChatWindowPage({
+        persona,
+        worldState,
+        history,
+        isOffline: true,
+        showScores,
+        statusUpdate,
+      })
+    );
+  }
+  // --- End of "Gotta Go" logic ---
+
   history += `\n\n${userName}: (${getTimestamp()}) ${prompt.trim()}`;
+
+  let statusUpdate = null;
 
   try {
     const contents = aiLogic.buildHistoryForApi(history, userName);
@@ -309,7 +358,6 @@ const postChatMessage = async (req, res) => {
       );
     }
 
-    // --- Special state change handlers for BFF features ---
     if (parsed.startDating === true) {
       console.log(`[SOCIAL] User ${userName} is now dating ${persona.name}.`);
       const oldPartnerKey = worldState.relationships[persona.key].dating;
@@ -363,14 +411,37 @@ const postChatMessage = async (req, res) => {
     const reply = parsed.reply || "sry, my mind is blank rn...";
     const change = parseInt(parsed.relationshipChange, 10) || 0;
 
-    // This is the fix. By normalizing newlines here, we prevent the renderer from
-    // incorrectly splitting a single multi-paragraph message into multiple messages.
-    const finalReply = reply.trim().replace(/\n\n/g, "\n");
+    const oldScore = worldState.userScores[friendKey];
+    worldState.userScores[friendKey] = clamp(oldScore + change, 0, 100);
+    const newScore = worldState.userScores[friendKey];
 
-    if (change !== 0) {
-      const oldScore = worldState.userScores[friendKey];
-      worldState.userScores[friendKey] = clamp(oldScore + change, 0, 100);
+    if (newScore <= 0 && oldScore > 0) {
+      worldState.moderation[friendKey].blocked = true;
+      statusUpdate = {
+        key: friendKey,
+        icon: "/icq-blocked.gif",
+        className: "buddy blocked-buddy",
+      };
+      console.log(`[REAL-TIME] ${userName} was blocked by ${persona.name}.`);
+    } else if (newScore === 100 && oldScore < 100) {
+      statusUpdate = {
+        key: friendKey,
+        icon: "/icq-bff.gif",
+        className: "buddy bff-buddy",
+      };
+      console.log(`[REAL-TIME] ${userName} is now BFFs with ${persona.name}.`);
+    } else if (newScore < 100 && oldScore === 100) {
+      statusUpdate = {
+        key: friendKey,
+        icon: "/icq-online.gif",
+        className: "buddy",
+      };
+      console.log(
+        `[REAL-TIME] ${userName} is no longer BFFs with ${persona.name}.`
+      );
     }
+
+    const finalReply = reply.trim().replace(/\n\n/g, "\n");
     history += `\n\n${persona.name}: (${getTimestamp()}) ${finalReply}`;
   } catch (err) {
     console.error(
@@ -382,16 +453,15 @@ const postChatMessage = async (req, res) => {
 
   worldState.chatHistories[friendKey] = history;
   writeProfile(userName, worldState);
+
   res.send(
     renderChatWindowPage({
       persona,
       worldState,
       history,
-      isOffline: false,
-      isBlocked:
-        worldState.moderation[friendKey] &&
-        worldState.moderation[friendKey].blocked,
+      isBlocked: worldState.moderation[friendKey]?.blocked,
       showScores,
+      statusUpdate,
     })
   );
 };
@@ -446,6 +516,7 @@ const postApology = async (req, res) => {
 
   let history = "";
   let isBlocked = worldState.moderation[friendKey].blocked;
+  let statusUpdate = null;
 
   try {
     const systemInstruction = aiLogic.generateApologyJudgeInstruction(
@@ -471,6 +542,12 @@ const postApology = async (req, res) => {
       worldState.userScores[friendKey] = 10;
       isBlocked = false;
       history = `System: (${getTimestamp()}) Your apology was accepted. You have been unblocked.`;
+      statusUpdate = {
+        key: friendKey,
+        icon: "/icq-online.gif",
+        className: "buddy",
+      };
+      console.log(`[REAL-TIME] ${userName} was unblocked by ${persona.name}.`);
     } else {
       history = `System: (${getTimestamp()}) Your apology was rejected.`;
     }
@@ -490,9 +567,9 @@ const postApology = async (req, res) => {
       persona,
       worldState,
       history,
-      isOffline: false,
       isBlocked,
       showScores,
+      statusUpdate,
     })
   );
 };
