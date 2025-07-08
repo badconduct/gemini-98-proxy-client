@@ -1,8 +1,12 @@
-const { escapeHtml } = require("../lib/utils");
+const { escapeHtml, loadAsset } = require("../lib/utils");
 const { renderHtmlPage } = require("./pageBuilder");
 const { renderDialogWindow } = require("./components");
 
-function renderLauncherPage(profiles = [], error = null) {
+function renderLauncherPage(
+  profiles = [],
+  error = null,
+  guestModeEnabled = true
+) {
   const title = "Gemini 98 - Launcher";
   const header = "ICQ98 Network Login";
 
@@ -28,6 +32,10 @@ function renderLauncherPage(profiles = [], error = null) {
   const newUserButtonText =
     profiles.length === 0 ? "Create Administrator" : "New Profile";
 
+  const guestButtonHtml = guestModeEnabled
+    ? `<a href="/guest-login">Login as Guest</a>`
+    : `<span style="display:inline-block; width: 120px;"></span>`; // Placeholder to keep alignment
+
   const bodyContent = `
       <div style="text-align: center; margin-bottom: 20px;">
         <img src="/icq-logo.gif" alt="ICQ Logo" width="64" height="64">
@@ -36,6 +44,7 @@ function renderLauncherPage(profiles = [], error = null) {
       ${formContent}
       <div class="button-container">
           <a href="/new-user">${newUserButtonText}</a>
+          ${guestButtonHtml}
       </div>
     `;
 

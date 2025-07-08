@@ -6,11 +6,12 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { loadAsset } = require("./lib/utils");
-const { readProfile } = require("./lib/state-manager");
+const { readProfile, listProfiles } = require("./lib/state-manager");
 const authController = require("./controllers/authController");
 const appController = require("./controllers/appController");
 const adminController = require("./controllers/adminController");
 const botController = require("./controllers/botController");
+const primeAdminController = require("./controllers/primeAdminController");
 const { UTILITY_BOTS } = require("./config/personas");
 
 // --- Configuration ---
@@ -20,6 +21,7 @@ global.imageJobs = {}; // In-memory store for image generation job status
 // --- Directory Setup ---
 const profilesDir = path.join(__dirname, "profiles");
 const imagesDir = path.join(__dirname, "public", "generated-images");
+const configDir = path.join(__dirname, "config");
 if (!fs.existsSync(profilesDir)) {
   fs.mkdirSync(profilesDir);
   console.log(`Created profiles directory at: ${profilesDir}`);
@@ -27,6 +29,10 @@ if (!fs.existsSync(profilesDir)) {
 if (!fs.existsSync(imagesDir)) {
   fs.mkdirSync(imagesDir, { recursive: true });
   console.log(`Created images directory at: ${imagesDir}`);
+}
+if (!fs.existsSync(configDir)) {
+  fs.mkdirSync(configDir);
+  console.log(`Created config directory at: ${configDir}`);
 }
 
 // --- Asset Loading ---
@@ -100,6 +106,14 @@ const requireAdmin = (req, res, next) => {
   }
 };
 
+const requirePrimePortalAuth = (req, res, next) => {
+  if (req.session && req.session.isPrimePortalAuthenticated) {
+    return next();
+  } else {
+    return res.redirect("/primeadmin");
+  }
+};
+
 // --- Chat Dispatcher ---
 const botKeys = new Set(UTILITY_BOTS.map((b) => b.key));
 const postChatDispatcher = (req, res) => {
@@ -116,6 +130,7 @@ app.get("/", authController.getLauncherPage);
 app.get("/new-user", authController.getNewUserPage);
 app.post("/create-user", authController.postCreateUser);
 app.post("/login", authController.postLogin);
+app.get("/guest-login", authController.getGuestLogin);
 app.get("/logout", authController.getLogout);
 
 // --- Protected App Routes ---
@@ -170,6 +185,25 @@ app.get(
   requireLogin,
   requireAdmin,
   adminController.getOptionsPage
+);
+
+// --- Prime Admin Portal Routes ---
+app.get("/primeadmin", primeAdminController.getLoginPage);
+app.post("/primeadmin/login", primeAdminController.postLogin);
+app.get(
+  "/primeadmin/dashboard",
+  requirePrimePortalAuth,
+  primeAdminController.getDashboardPage
+);
+app.post(
+  "/primeadmin/save",
+  requirePrimePortalAuth,
+  primeAdminController.postSaveChanges
+);
+app.post(
+  "/primeadmin/reset",
+  requirePrimePortalAuth,
+  primeAdminController.postResetToDefaults
 );
 
 // --- Asset Routes ---
@@ -239,10 +273,83 @@ app.use(
   express.static(path.join(__dirname, "public/generated-images"))
 );
 
+// --- Guest Profile Cleanup ---
+const GUEST_INACTIVITY_MINUTES = 60;
+const CLEANUP_INTERVAL_MINUTES = 30;
+
+function deleteProfileAndAssets(userName, profile) {
+  const profilePath = path.join(__dirname, "profiles", `${userName}.json`);
+  try {
+    // Delete associated images first
+    if (profile.receivedFiles && profile.receivedFiles.length > 0) {
+      profile.receivedFiles.forEach((file) => {
+        const imageFilename = path.basename(file.url);
+        const imagePath = path.join(
+          __dirname,
+          "public",
+          "generated-images",
+          imageFilename
+        );
+        if (fs.existsSync(imagePath)) {
+          fs.unlinkSync(imagePath);
+        }
+      });
+    }
+    // Delete the profile file
+    if (fs.existsSync(profilePath)) {
+      fs.unlinkSync(profilePath);
+    }
+  } catch (err) {
+    console.error(
+      `[GUEST_CLEANUP] Error deleting profile and assets for ${userName}:`,
+      err
+    );
+  }
+}
+
+function cleanupGuestProfiles() {
+  console.log(
+    `[GUEST_CLEANUP] Running scheduled task to clean up inactive guest profiles...`
+  );
+  const profileNames = listProfiles();
+  const now = new Date();
+
+  profileNames.forEach((name) => {
+    const profile = readProfile(name);
+    if (profile && profile.isGuest) {
+      const lastLogin = profile.lastLogin ? new Date(profile.lastLogin) : null;
+      if (!lastLogin) {
+        // Should not happen, but as a safeguard.
+        console.log(
+          `[GUEST_CLEANUP] Deleting guest profile ${name} with no last login time.`
+        );
+        deleteProfileAndAssets(name, profile);
+        return;
+      }
+
+      const diffMinutes = (now - lastLogin) / (1000 * 60);
+      if (diffMinutes > GUEST_INACTIVITY_MINUTES) {
+        console.log(
+          `[GUEST_CLEANUP] Deleting inactive guest profile ${name} (inactive for ${Math.round(
+            diffMinutes
+          )} minutes).`
+        );
+        deleteProfileAndAssets(name, profile);
+      }
+    }
+  });
+}
+
+// Start the cleanup task
+setInterval(cleanupGuestProfiles, CLEANUP_INTERVAL_MINUTES * 60 * 1000);
+
 // --- Start Server ---
 const HOST = process.env.HOST || "localhost"; // Use "localhost" for local dev
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, HOST, () => {
   console.log(`Server running at http://${HOST}:${PORT}`);
+  console.log(
+    `Guest profile cleanup will run every ${CLEANUP_INTERVAL_MINUTES} minutes.`
+  );
 });

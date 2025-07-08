@@ -1,10 +1,11 @@
 const fs = require("fs");
 const path = require("path");
+const { v4: uuidv4 } = require("uuid");
 const {
   renderLauncherPage,
   renderNewUserPage,
   renderLoginSuccessPage,
-} = require("../views/renderer");
+} = require("../views/authRenderer");
 const {
   generateInitialWorldState,
   readProfile,
@@ -13,11 +14,44 @@ const {
   profileExists,
 } = require("../lib/state-manager");
 const { verifyPassword } = require("../lib/auth");
+const { getSimulationConfig } = require("../lib/config-manager");
+
+const GUEST_NAMES = ["Alex", "Jordan", "Casey", "Taylor", "Morgan", "Sky"];
 
 const getLauncherPage = (req, res) => {
   const profiles = listProfiles();
+  const simulationConfig = getSimulationConfig();
+  const guestModeEnabled = simulationConfig.featureToggles.enableGuestMode;
   // Pass the error from query params if a login failed
-  res.send(renderLauncherPage(profiles, req.query.error));
+  res.send(renderLauncherPage(profiles, req.query.error, guestModeEnabled));
+};
+
+const getSingleUserLogin = (req, res) => {
+  const profiles = listProfiles();
+  const primeAdminProfile = profiles
+    .map((p) => readProfile(p))
+    .find((p) => p.isPrimeAdmin);
+
+  if (!primeAdminProfile) {
+    // If no prime admin exists, redirect to the new user page to create one.
+    return res.redirect("/new-user");
+  }
+
+  req.session.userName = primeAdminProfile.userName;
+  req.session.isAdmin = true;
+
+  // Also set the prime portal auth flag in single user mode for convenience
+  req.session.isPrimePortalAuthenticated = true;
+  req.session.primeAdminUserName = primeAdminProfile.userName;
+
+  req.session.save((err) => {
+    if (err) {
+      console.error("Single User Mode session save error:", err);
+      // Fallback to regular launcher if session fails
+      return res.redirect(`/?error=A server error occurred during auto-login.`);
+    }
+    res.send(renderLoginSuccessPage());
+  });
 };
 
 const getNewUserPage = (req, res) => {
@@ -85,15 +119,19 @@ const postCreateUser = (req, res) => {
   const isAdmin = isFirstUser;
   const isPrimeAdmin = isFirstUser;
 
+  const simulationConfig = getSimulationConfig();
   const worldState = generateInitialWorldState(
-    userName.trim(),
-    realName.trim(),
-    password.trim(),
-    ageNum,
-    sex,
-    location.trim(),
-    isAdmin,
-    isPrimeAdmin
+    {
+      userName: userName.trim(),
+      realName: realName.trim(),
+      password: password.trim(),
+      age: ageNum,
+      sex: sex,
+      location: location.trim(),
+      isAdmin: isAdmin,
+      isPrimeAdmin: isPrimeAdmin,
+    },
+    simulationConfig
   );
   writeProfile(userName.trim(), worldState);
 
@@ -140,9 +178,11 @@ const postLogin = (req, res) => {
         // Function to clear directory contents
         const clearDir = (dir) => {
           if (fs.existsSync(dir)) {
-            fs.readdirSync(dir).forEach((file) =>
-              fs.unlinkSync(path.join(dir, file))
-            );
+            fs.readdirSync(dir).forEach((file) => {
+              if (file !== "guest_counter.json") {
+                fs.unlinkSync(path.join(dir, file));
+              }
+            });
           }
         };
 
@@ -204,6 +244,74 @@ const postLogin = (req, res) => {
   });
 };
 
+const getGuestLogin = (req, res) => {
+  const simulationConfig = getSimulationConfig();
+  if (!simulationConfig.featureToggles.enableGuestMode) {
+    return res.redirect("/?error=Guest mode is currently disabled.");
+  }
+
+  // 1. Generate a unique guest profile
+  const guestId = uuidv4().split("-")[0]; // short uuid
+  const guestUserName = `Guest-${guestId}`;
+  const randomName =
+    GUEST_NAMES[Math.floor(Math.random() * GUEST_NAMES.length)];
+  const randomAge = 14 + Math.floor(Math.random() * 6); // 14-19
+  const randomSex = Math.random() < 0.5 ? "M" : "F";
+  const guestPassword = uuidv4(); // Temporary password, not meant to be used
+
+  const worldState = generateInitialWorldState(
+    {
+      userName: guestUserName,
+      realName: randomName,
+      password: guestPassword,
+      age: randomAge,
+      sex: randomSex,
+      location: "The Internet",
+      isAdmin: false,
+      isPrimeAdmin: false,
+      isGuest: true,
+    },
+    simulationConfig
+  );
+
+  // Set lastLogin immediately so cleanup logic can work
+  worldState.lastLogin = new Date().toISOString();
+  writeProfile(guestUserName, worldState);
+
+  // 2. Increment guest counter
+  const counterPath = path.join(
+    __dirname,
+    "..",
+    "profiles",
+    "guest_counter.json"
+  );
+  let guestData = { count: 0 };
+  if (fs.existsSync(counterPath)) {
+    try {
+      guestData = JSON.parse(fs.readFileSync(counterPath, "utf8"));
+    } catch (e) {
+      console.error("Error reading guest counter, resetting.", e);
+    }
+  }
+  guestData.count = (guestData.count || 0) + 1;
+  fs.writeFileSync(counterPath, JSON.stringify(guestData));
+
+  // 3. Set session and respond
+  req.session.userName = worldState.userName;
+  req.session.isAdmin = worldState.isAdmin;
+  req.session.isGuest = true; // Maybe useful later
+
+  req.session.save((err) => {
+    if (err) {
+      console.error("Session save error for guest:", err);
+      return res.redirect(
+        `/?error=A server error occurred during guest login.`
+      );
+    }
+    res.send(renderLoginSuccessPage());
+  });
+};
+
 const getLogout = (req, res) => {
   req.session.destroy((err) => {
     if (err) {
@@ -220,4 +328,6 @@ module.exports = {
   postCreateUser,
   postLogin,
   getLogout,
+  getGuestLogin,
+  getSingleUserLogin,
 };

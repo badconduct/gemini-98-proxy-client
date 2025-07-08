@@ -1,35 +1,67 @@
 const fs = require("fs");
 const path = require("path");
-const { renderUsersPage, renderOptionsPage } = require("../views/renderer");
+const {
+  renderUsersPage,
+  renderOptionsPage,
+} = require("../views/adminRenderer");
 const {
   listProfiles,
   readProfile,
   writeProfile,
   generateInitialWorldState,
 } = require("../lib/state-manager");
+const { getSimulationConfig } = require("../lib/config-manager");
 
 const getOptionsPage = (req, res) => {
   res.send(renderOptionsPage());
 };
 
 const getUsersPage = (req, res) => {
+  // Read guest counter
+  const counterPath = path.join(
+    __dirname,
+    "..",
+    "profiles",
+    "guest_counter.json"
+  );
+  let guestCount = 0;
+  if (fs.existsSync(counterPath)) {
+    try {
+      const guestData = JSON.parse(fs.readFileSync(counterPath, "utf8"));
+      guestCount = guestData.count || 0;
+    } catch (e) {
+      console.error("Could not read guest counter.", e);
+    }
+  }
+
   const profileNames = listProfiles();
   const users = profileNames
     .map((name) => {
       const profile = readProfile(name);
+      // Filter out guest profiles from the user list
+      if (!profile || profile.isGuest) {
+        return null;
+      }
       return {
-        name: profile ? profile.userName : name,
-        lastLogin: profile ? profile.lastLogin : null,
-        isAdmin: profile ? profile.isAdmin : false,
-        isPrimeAdmin: profile ? profile.isPrimeAdmin : false,
-        age: profile ? profile.age : "N/A",
-        sex: profile ? profile.sex : "N/A",
-        location: profile ? profile.location : "N/A",
+        name: profile.userName,
+        lastLogin: profile.lastLogin,
+        isAdmin: profile.isAdmin,
+        isPrimeAdmin: profile.isPrimeAdmin,
+        age: profile.age,
+        sex: profile.sex,
+        location: profile.location,
       };
     })
+    .filter(Boolean) // Remove nulls from the filtered guests
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  res.send(renderUsersPage({ users, adminUserName: req.session.userName }));
+  res.send(
+    renderUsersPage({
+      users,
+      adminUserName: req.session.userName,
+      guestCount,
+    })
+  );
 };
 
 const postUpdateUsers = (req, res) => {
@@ -43,10 +75,11 @@ const postUpdateUsers = (req, res) => {
   const userAges = req.body.age || {};
   const userSexes = req.body.sex || {};
   const userLocations = req.body.location || {};
+  const simulationConfig = getSimulationConfig();
 
   allUserNames.forEach((userName) => {
     const profile = readProfile(userName);
-    if (!profile) return;
+    if (!profile || profile.isGuest) return; // Do not allow editing guest profiles
 
     const newIsAdmin =
       designatedAdmins.includes(userName) || profile.isPrimeAdmin;
@@ -67,14 +100,18 @@ const postUpdateUsers = (req, res) => {
       // A/S/L change triggers a full regeneration.
       // This will also apply the new admin status.
       const newWorldState = generateInitialWorldState(
-        profile.userName,
-        profile.realName,
-        profile.password, // Pass the hashed password object
-        newAge,
-        newSex,
-        newLocation,
-        newIsAdmin,
-        profile.isPrimeAdmin
+        {
+          userName: profile.userName,
+          realName: profile.realName,
+          password: profile.password, // Pass the hashed password object
+          age: newAge,
+          sex: newSex,
+          location: newLocation,
+          isAdmin: newIsAdmin,
+          isPrimeAdmin: profile.isPrimeAdmin,
+          isGuest: profile.isGuest, // Preserve guest status on reset, though unlikely
+        },
+        simulationConfig
       );
       writeProfile(userName, newWorldState);
     } else if (adminStatusChanged) {
@@ -179,15 +216,20 @@ const postResetUser = (req, res) => {
     console.log(
       `[ADMIN] Profile reset for ${userNameToReset} initiated by ${adminUserName}.`
     );
+    const simulationConfig = getSimulationConfig();
     const newWorldState = generateInitialWorldState(
-      profile.userName,
-      profile.realName,
-      profile.password, // Pass the hashed password object
-      profile.age,
-      profile.sex,
-      profile.location,
-      profile.isAdmin,
-      profile.isPrimeAdmin
+      {
+        userName: profile.userName,
+        realName: profile.realName,
+        password: profile.password, // Pass the hashed password object
+        age: profile.age,
+        sex: profile.sex,
+        location: profile.location,
+        isAdmin: profile.isAdmin,
+        isPrimeAdmin: profile.isPrimeAdmin,
+        isGuest: profile.isGuest, // Preserve guest status on reset
+      },
+      simulationConfig
     );
     writeProfile(userNameToReset, newWorldState);
   } else {

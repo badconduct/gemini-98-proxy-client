@@ -1,0 +1,44 @@
+{
+  "initialScores": {
+    "sameGroup": 60,
+    "differentGroup": 50,
+    "elion": 0
+  },
+  "scoreModifiers": {
+    "insultInterests": -5,
+    "complimentInterests": 5,
+    "flirtFail": -5,
+    "flirtSuccess": 7,
+    "liePenalty": -5,
+    "honestyPenalty": -5
+  },
+  "datingRules": {
+    "minPairs": 3,
+    "maxPairs": 5,
+    "maxCrushes": 2,
+    "cheatingPenaltyScore": 10,
+    "breakupForgivenessBonus": 40
+  },
+  "datingLockouts": {
+    "towniesAndStudents": false,
+    "jocksAndGoths": false,
+    "prepsAndSlackers": false
+  },
+  "socialRules": {
+    "creepyAgeThreshold": 40,
+    "creepyAgePenalty": -1,
+    "patronizingAgeThreshold": 13,
+    "gossipChance": 0.5,
+    "gossipScope": 3,
+    "bffThreshold": 100,
+    "hostileThreshold": 10
+  },
+  "featureToggles": {
+    "enableGuestMode": true,
+    "enableHistoryCondensation": true,
+    "enableHonestySystem": true
+  },
+  "systemSettings": {
+    "historyCondensationThreshold": 30
+  }
+}

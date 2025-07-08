@@ -35,7 +35,7 @@ The front-end is fully retro-compatible:
 ### Key Features
 
 - **Secure, File-Based Profiles:** No more cookies for state. Every user has a password-protected profile saved securely on the server.
-- **Multi-Profile Launcher System:** The application starts with a login portal. Log in to an existing account or create a new one. The buddy list then "launches" in a new window.
+- **Multi-Profile Launcher System:** The application starts with a login portal. Log in to an existing account, create a new one, or log in as a temporary guest.
 - **Deep AI Personas:** Chat with over a dozen unique AI friends, each with distinct personalities, interests, and online/offline schedules that vary based on the season.
 - **Helpful Utility Bots:** Get help from specialized bots: `Code Bot` for programming, `98SE Help Bot` for retro troubleshooting, `Nostalgia Bot` for hints, and a general-purpose `Gemini Bot`.
 - **No Front-End Frameworks:** Works in Netscape 4 or IE6, no webpack, no BS.
@@ -58,10 +58,9 @@ The core of the application is a dynamic rules engine that generates unique syst
 
 The first user created becomes the **Prime Administrator** with access to powerful tools.
 
-- **User Management Panel:** View all registered users, their last login time, and their A/S/L.
-- **Edit & Reset Users:** Directly edit a user's Age, Sex, or Location. Changing these fields automatically resets that user's social world to match their new identity. You can also reset a user's profile with a single click, wiping their chat history and relationships.
-- **Grant/Revoke Admin Status:** Promote other users to administrators.
-- **Dangerous Options:** An options panel allows you to do things like reset the _entire application_, deleting all profiles and images, forcing a fresh start.
+- **User Management Panel (`/admin/users`):** View all registered users, their last login time, and their A/S/L. Edit user details, grant/revoke standard admin status, or reset/delete profiles.
+- **Dangerous Options (`/admin/options`):** An options panel for standard admins to perform cheats for their own profile, like setting all relationship scores, or resetting the entire application (deleting all profiles and images).
+- **Prime Admin Portal (`/primeadmin`):** A separate, secure portal only accessible by the Prime Administrator. This "god mode" panel allows you to modify the global rules of the entire simulation. Change default relationship scores, dating rules, social penalties, and more. Saving changes here will trigger a "simulation restart," regenerating the social world for all non-admin users based on your new rules.
 
 ---
 
@@ -81,7 +80,7 @@ The first user created becomes the **Prime Administrator** with access to powerf
     ```
 
 3.  **Add your Gemini API key & Configuration**
-    Create a `.env` file in the project root with your API key, a session secret, and an optional timezone offset:
+    Create a `.env` file in the project root with your API key, a session secret, and any optional settings:
 
     ```
     # Required
@@ -91,6 +90,10 @@ The first user created becomes the **Prime Administrator** with access to powerf
     # Optional: Set this to your local UTC offset to ensure schedules are correct.
     # Examples: -4 for EDT, -5 for EST, -7 for PDT, 1 for CET. Defaults to 0 (UTC).
     TIMEZONE_OFFSET=-5
+
+    # Optional: For single-user convenience.
+    # Bypasses the login screen and automatically logs in as the Prime Admin.
+    SINGLE_USER_MODE=true
     ```
 
 4.  **Start the server**
@@ -104,7 +107,7 @@ The first user created becomes the **Prime Administrator** with access to powerf
     - **🖥️ Host browser:** `http://localhost:3000`
     - **🧓 Retro browser (e.g., IE6 on Win98):** `http://<your-local-ip>:3000`
 
-    The first account you create will automatically become the permanent, undeletable **Prime Administrator**.
+    The first account you create will automatically become the permanent, undeletable **Prime Administrator**. If `SINGLE_USER_MODE` is enabled, the app will log you in automatically after you create this account.
 
 ---
 
