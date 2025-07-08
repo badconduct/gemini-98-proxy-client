@@ -50,7 +50,9 @@ The core of the application is a dynamic rules engine that generates unique syst
   - **Ages 20-39 (Townie/Alumni):** You have a natural rapport with the other townies.
   - **Ages <=13 or >=40 (Online Friend):** Local AI friends will be suspicious of you. If you reveal you're under 14, they'll become patronizing. If you reveal you're over 40, students will find you "creepy" and their opinion of you will permanently decrease with every interaction.
 - **Gossip Mechanic:** When you reveal your true age to a local friend (a Student or Townie), they'll tell others in their social group! This creates a dynamic world where information spreads and your reputation can change based on who you trust.
+- **Honesty & Preference System:** The simulation now learns your tastes. When you express a strong like or dislike for a topic (music, movies, etc.), the system remembers it. Be careful what you say to whom! If you tell one friend you hate pop music and another that you love it, the gossip network will catch your contradiction. Characters will call you out for being fake, resulting in a one-time relationship penalty. Stay consistent to maintain your reputation!
 - **Relationship Score:** Your conversations directly impact your relationship score with each friend, unlocking different conversational paths and behaviors.
+- **Dating & Consequences:** You can date student characters if your friendship is high enough. This has real consequences, including potential breakups, jilted ex-lovers, and getting caught if you date more than one person at a time.
 
 ### Administrator Features
 
@@ -68,8 +70,8 @@ The first user created becomes the **Prime Administrator** with access to powerf
 1.  **Clone this repo**
 
     ```bash
-    git clone https://github.com/yourusername/icq98-proxy.git
-    cd icq98-proxy
+    git clone https://github.com/badconduct/gemini-98-proxy-client.git
+    cd gemini-98-proxy-client
     ```
 
 2.  **Install dependencies**
@@ -78,12 +80,17 @@ The first user created becomes the **Prime Administrator** with access to powerf
     npm install
     ```
 
-3.  **Add your Gemini API key**
-    Create a `.env` file in the project root with your API key and a session secret:
+3.  **Add your Gemini API key & Configuration**
+    Create a `.env` file in the project root with your API key, a session secret, and an optional timezone offset:
 
     ```
+    # Required
     API_KEY=your-gemini-api-key
     SESSION_SECRET=a-long-random-string-for-security
+
+    # Optional: Set this to your local UTC offset to ensure schedules are correct.
+    # Examples: -4 for EDT, -5 for EST, -7 for PDT, 1 for CET. Defaults to 0 (UTC).
+    TIMEZONE_OFFSET=-5
     ```
 
 4.  **Start the server**

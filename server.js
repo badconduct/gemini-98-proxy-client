@@ -6,6 +6,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { loadAsset } = require("./lib/utils");
+const { readProfile } = require("./lib/state-manager");
 const authController = require("./controllers/authController");
 const appController = require("./controllers/appController");
 const adminController = require("./controllers/adminController");
@@ -73,6 +74,23 @@ const requireLogin = (req, res, next) => {
   }
 };
 
+// --- Profile Loader Middleware ---
+const loadProfile = (req, res, next) => {
+  // This middleware assumes requireLogin has already run.
+  // It reads the user's profile once and attaches it to the request object.
+  const worldState = readProfile(req.session.userName);
+  if (!worldState) {
+    // This case should be rare, but it protects against a desync
+    // where a session exists for a deleted profile.
+    console.error(
+      `Profile not found for logged-in user: ${req.session.userName}. Forcing logout.`
+    );
+    return req.session.destroy(() => res.redirect("/"));
+  }
+  req.worldState = worldState;
+  next();
+};
+
 const requireAdmin = (req, res, next) => {
   if (req.session && req.session.isAdmin) {
     return next();
@@ -101,15 +119,26 @@ app.post("/login", authController.postLogin);
 app.get("/logout", authController.getLogout);
 
 // --- Protected App Routes ---
-app.get("/buddylist", requireLogin, appController.getBuddyListPage);
-app.get("/about", requireLogin, appController.getAboutPage);
-app.get("/chat", requireLogin, appController.getChatPage);
-app.post("/chat", requireLogin, postChatDispatcher); // Use the new dispatcher
-app.get("/chat/clear", requireLogin, appController.getClearChat);
-app.get("/apology", requireLogin, appController.getApologyPage);
-app.post("/apologize", requireLogin, appController.postApology);
-app.get("/files", requireLogin, appController.getFilesPage);
-app.get("/check-image", requireLogin, appController.getCheckImageStatus);
+// Note: loadProfile is added after requireLogin
+app.get(
+  "/buddylist",
+  requireLogin,
+  loadProfile,
+  appController.getBuddyListPage
+);
+app.get("/about", requireLogin, loadProfile, appController.getAboutPage);
+app.get("/chat", requireLogin, loadProfile, appController.getChatPage);
+app.post("/chat", requireLogin, loadProfile, postChatDispatcher);
+app.get("/chat/clear", requireLogin, loadProfile, appController.getClearChat);
+app.get("/apology", requireLogin, loadProfile, appController.getApologyPage);
+app.post("/apologize", requireLogin, loadProfile, appController.postApology);
+app.get("/files", requireLogin, loadProfile, appController.getFilesPage);
+app.get(
+  "/check-image",
+  requireLogin,
+  loadProfile,
+  appController.getCheckImageStatus
+);
 
 // --- Protected Admin Routes ---
 app.get(

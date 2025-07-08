@@ -11,8 +11,9 @@ const {
   renderAboutPage,
 } = require("../views/appRenderer");
 const { getTimestamp, clamp } = require("../lib/utils");
-const { readProfile, writeProfile } = require("../lib/state-manager");
+const { writeProfile } = require("../lib/state-manager");
 const aiLogic = require("../lib/ai-logic");
+const { getRelationshipTier } = require("../lib/ai-logic");
 
 const apiKey = process.env.API_KEY;
 if (!apiKey) {
@@ -20,7 +21,11 @@ if (!apiKey) {
 }
 const ai = new GoogleGenAI({ apiKey });
 
-// --- Background Image Generation ---
+// --- Timezone Configuration ---
+const TIMEZONE_OFFSET = parseInt(process.env.TIMEZONE_OFFSET, 10) || 0;
+const CONDENSATION_THRESHOLD = 30; // Number of messages before summarizing history
+
+// --- Background Job Functions ---
 
 async function generateImageInBackground(jobId, persona, userName) {
   try {
@@ -74,26 +79,99 @@ async function generateImageInBackground(jobId, persona, userName) {
   }
 }
 
+/**
+ * Uses Gemini to summarize a long chat history.
+ * @param {string} historyText The full chat history text.
+ * @param {string} userName The user's name.
+ * @param {string} personaName The persona's name.
+ * @returns {Promise<string>} The generated summary.
+ */
+async function summarizeHistory(historyText, userName, personaName) {
+  console.log(
+    `[AI] Summarizing chat history between ${userName} and ${personaName}.`
+  );
+  const summarizationPrompt = `You are an expert summarizer. Below is a chat history between a user named "${userName}" and a character named "${personaName}". Your task is to create a concise, third-person summary of the key events, topics discussed, and the overall state of their relationship. Focus on facts that would be important for ${personaName} to remember in future conversations.
+
+Example:
+- The user and ${personaName} bonded over their shared love for 90s rock music.
+- ${personaName} revealed they have a crush on another character named Kevin.
+- The user gave ${personaName} advice about a school project.
+- Their relationship is friendly and trusting.
+
+Do not include greetings or conversational fluff. Output only the summary.
+
+CHAT HISTORY:
+---
+${historyText}
+---
+END OF CHAT HISTORY.
+
+Provide your summary now.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-04-17",
+      contents: [{ role: "user", parts: [{ text: summarizationPrompt }] }],
+    });
+    return response.text.trim();
+  } catch (err) {
+    console.error(
+      `[AI Summarizer] Error summarizing history for ${personaName}:`,
+      err
+    );
+    return `// Summary generation failed. Last known topic: ${historyText.slice(
+      -200
+    )}`;
+  }
+}
+
+/**
+ * Uses Gemini to detect if a user message expresses a strong preference.
+ * @param {string} userMessage The user's chat message.
+ * @returns {Promise<{action: 'like'|'dislike'|'none', topic: string|null}>} The preference analysis.
+ */
+async function analyzeUserPreference(userMessage) {
+  const analysisPrompt = `Analyze the following user message to determine if it expresses a strong, direct preference for a topic. The topic should be a noun or noun phrase. Respond ONLY with a JSON object with the keys "action" (either "like", "dislike", or "none") and "topic" (the subject of the preference, normalized to lowercase).
+
+User Message: "${userMessage}"
+
+Examples:
+- "I love The Cure, fyi" -> {"action": "like", "topic": "the cure"}
+- "Pop music is super lame." -> {"action": "dislike", "topic": "pop music"}
+- "what other shows you like?" -> {"action": "none", "topic": null}
+- "I agree" -> {"action": "none", "topic": null}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-04-17",
+      contents: [{ role: "user", parts: [{ text: analysisPrompt }] }],
+      config: { responseMimeType: "application/json" },
+    });
+    let jsonStr = response.text.trim();
+    const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
+    const match = jsonStr.match(fenceRegex);
+    if (match && match[2]) jsonStr = match[2].trim();
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error("[PREFERENCE ANALYSIS] Failed:", e);
+    return { action: "none", topic: null };
+  }
+}
+
 // --- Route Handlers ---
 
 const getBuddyListPage = (req, res) => {
-  const { userName } = req.session;
-  const worldState = readProfile(userName);
-
-  if (!worldState) {
-    console.error(
-      `Logged-in user's profile not found: ${userName}. Forcing logout.`
-    );
-    return req.session.destroy(() => res.redirect("/"));
-  }
+  const worldState = req.worldState; // Profile is now loaded by middleware
 
   const onlineFriendKeys = [];
   const offlineFriendKeys = [];
 
   const now = new Date();
-  const currentHour = now.getHours();
-  const currentMonth = now.getMonth(); // 0-indexed: July=6, Aug=7
-  const currentDay = now.getDay();
+  const utcHour = now.getUTCHours();
+  // Calculate the hour in the target timezone
+  const currentHour = (utcHour + TIMEZONE_OFFSET + 24) % 24;
+  const currentMonth = now.getUTCMonth(); // 0-indexed: July=6, Aug=7
+  const currentDay = now.getUTCDay();
 
   // Summer is July and August. School year is Sep-June.
   const isSummer = currentMonth >= 6 && currentMonth <= 7;
@@ -161,14 +239,7 @@ const getBuddyListPage = (req, res) => {
 const getChatPage = (req, res) => {
   const { friend: friendKey, status } = req.query;
   const { userName } = req.session;
-
-  const worldState = readProfile(userName);
-  if (!worldState) {
-    console.error(
-      `Logged-in user's profile not found: ${userName}. Forcing logout.`
-    );
-    return req.session.destroy(() => res.redirect("/"));
-  }
+  const worldState = req.worldState; // Profile is now loaded by middleware
 
   const persona = ALL_PERSONAS.find((p) => p.key === friendKey);
   if (!persona) {
@@ -227,14 +298,7 @@ const getChatPage = (req, res) => {
 const postChatMessage = async (req, res) => {
   const { prompt, friend: friendKey, history: historyBase64 } = req.body;
   const { userName } = req.session;
-
-  const worldState = readProfile(userName);
-  if (!worldState) {
-    console.error(
-      `Logged-in user's profile not found: ${userName}. Forcing logout.`
-    );
-    return req.session.destroy(() => res.redirect("/"));
-  }
+  const worldState = req.worldState; // Profile is now loaded by middleware
 
   const persona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
   let history = Buffer.from(historyBase64, "base64").toString("utf8");
@@ -256,11 +320,12 @@ const postChatMessage = async (req, res) => {
     );
   }
 
-  // --- Real-time "Gotta Go" logic ---
+  // --- Real-time "Gotta Go" logic with timezone awareness ---
   const now = new Date();
-  const currentHour = now.getHours();
-  const currentMonth = now.getMonth();
-  const currentDay = now.getDay();
+  const utcHour = now.getUTCHours();
+  const currentHour = (utcHour + TIMEZONE_OFFSET + 24) % 24;
+  const currentMonth = now.getUTCMonth();
+  const currentDay = now.getUTCDay();
   const isSummer = currentMonth >= 6 && currentMonth <= 7;
   const isWeekend = currentDay === 0 || currentDay === 6;
   const dayTypeKey = isWeekend ? "weekend" : "weekday";
@@ -327,11 +392,26 @@ const postChatMessage = async (req, res) => {
 
   try {
     const contents = aiLogic.buildHistoryForApi(history, userName);
-    const systemInstruction = aiLogic.generatePersonalizedInstruction(
-      persona,
-      worldState,
-      isSummer
-    );
+
+    // --- Caching Logic: Check for a cached instruction ---
+    let systemInstruction = worldState.instructionCache[friendKey];
+    if (!systemInstruction) {
+      console.log(
+        `[AI] Instruction cache miss for ${persona.name}. Generating new instruction.`
+      );
+      const summary = worldState.chatSummaries[friendKey] || null;
+      systemInstruction = aiLogic.generatePersonalizedInstruction(
+        persona,
+        worldState,
+        isSummer,
+        summary
+      );
+      // Store the newly generated instruction in the cache
+      worldState.instructionCache[friendKey] = systemInstruction;
+    } else {
+      console.log(`[AI] Instruction cache hit for ${persona.name}.`);
+    }
+
     const config = {
       systemInstruction,
       responseMimeType: "application/json",
@@ -350,6 +430,7 @@ const postChatMessage = async (req, res) => {
       jsonStr = match[2].trim();
     }
     const parsed = JSON.parse(jsonStr);
+    let invalidateCache = false;
 
     if (parsed.isImageRequest) {
       const jobId = uuidv4();
@@ -377,7 +458,7 @@ const postChatMessage = async (req, res) => {
       );
     }
 
-    // --- Advanced Dating Logic ---
+    // --- Advanced Dating & Social Logic ---
     if (parsed.cheatingDetected === true) {
       console.log(`[SOCIAL] Cheating by ${userName} detected!`);
       const currentPartners = FRIEND_PERSONAS.filter(
@@ -386,12 +467,17 @@ const postChatMessage = async (req, res) => {
       currentPartners.forEach((partner) => {
         worldState.relationships[partner.key].dating = null;
         worldState.userScores[partner.key] = 10;
+        console.log(
+          `[CACHE] Invalidating cache for ${partner.name} due to cheating.`
+        );
+        delete worldState.instructionCache[partner.key];
       });
       history += `\n\nSystem: (${getTimestamp()}) ${
         parsed.reply || "Word got around that you were seeing multiple people."
       }`;
     } else if (parsed.startDating === true) {
       console.log(`[SOCIAL] User ${userName} is now dating ${persona.name}.`);
+      invalidateCache = true;
       const oldPartnerKey = worldState.relationships[persona.key].dating;
       if (oldPartnerKey && oldPartnerKey !== "user_player") {
         const oldPartner = FRIEND_PERSONAS.find((p) => p.key === oldPartnerKey);
@@ -416,6 +502,7 @@ const postChatMessage = async (req, res) => {
       console.log(
         `[SOCIAL] User ${userName} revealed their true age to ${persona.name}.`
       );
+      invalidateCache = true;
       worldState.ageKnowledge[friendKey] = { knows: true, source: "user" };
       const sourcePersona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
       if (
@@ -435,6 +522,10 @@ const postChatMessage = async (req, res) => {
               knows: true,
               source: friendKey,
             };
+            console.log(
+              `[CACHE] Invalidating cache for ${member.name} due to gossip.`
+            );
+            delete worldState.instructionCache[member.key];
           }
         });
       }
@@ -446,6 +537,16 @@ const postChatMessage = async (req, res) => {
     const oldScore = worldState.userScores[friendKey];
     worldState.userScores[friendKey] = clamp(oldScore + change, 0, 100);
     const newScore = worldState.userScores[friendKey];
+
+    // --- Cache & Status Update Logic ---
+    const oldTier = getRelationshipTier(oldScore);
+    const newTier = getRelationshipTier(newScore);
+    if (oldTier !== newTier) {
+      console.log(
+        `[CACHE] Invalidating cache for ${persona.name} due to relationship tier change (${oldTier} -> ${newTier}).`
+      );
+      invalidateCache = true;
+    }
 
     if (newScore <= 0 && oldScore > 0) {
       worldState.moderation[friendKey].blocked = true;
@@ -497,9 +598,62 @@ const postChatMessage = async (req, res) => {
       );
     }
 
-    // Normalize newlines before saving to history
-    const normalizedReply = reply.trim().replace(/\n\n/g, "\n");
-    history += `\n\n${persona.name}: (${getTimestamp()}) ${normalizedReply}`;
+    if (invalidateCache) {
+      delete worldState.instructionCache[friendKey];
+    }
+
+    history += `\n\n${persona.name}: (${getTimestamp()}) ${reply.trim()}`;
+
+    // --- Preference System Logic (runs after adding reply, before writing profile) ---
+    const preference = await analyzeUserPreference(prompt.trim());
+    if (preference.action === "like" && preference.topic) {
+      // Only add a new "like" if it's not already in dislikes (to avoid instant contradiction)
+      // and not already in likes.
+      if (
+        !worldState.userDislikes[preference.topic] &&
+        !worldState.userLikes[preference.topic]
+      ) {
+        console.log(
+          `[PREFERENCE] User likes '${preference.topic}'. Told to ${persona.name}.`
+        );
+        worldState.userLikes[preference.topic] = friendKey;
+      }
+    } else if (preference.action === "dislike" && preference.topic) {
+      // Only add a new "dislike" if it's not already in likes.
+      if (
+        !worldState.userLikes[preference.topic] &&
+        !worldState.userDislikes[preference.topic]
+      ) {
+        console.log(
+          `[PREFERENCE] User dislikes '${preference.topic}'. Told to ${persona.name}.`
+        );
+        worldState.userDislikes[preference.topic] = friendKey;
+      }
+    }
+
+    // --- History Condensation Logic (runs after adding new reply) ---
+    const messages = history.split(
+      /\n\n(?=(?:System:|Image:|(?:[^:]+:\s\([^)]+\)\s)))/
+    );
+    const messageCount = messages.filter(
+      (line) => !line.startsWith("System:") && !line.startsWith("Image:")
+    ).length;
+
+    if (messageCount > CONDENSATION_THRESHOLD) {
+      console.log(
+        `[HISTORY] Condensation triggered for ${persona.name}. Message count: ${messageCount}`
+      );
+      const summary = await summarizeHistory(history, userName, persona.name);
+      worldState.chatSummaries[friendKey] = summary;
+
+      const lastFewMessages = messages.slice(-4).join("\n\n");
+      history = `System: (${getTimestamp()}) The previous conversation has been summarized to preserve long-term memory.\n\nSummary:\n${summary}\n\nSystem: (${getTimestamp()}) --- Resuming conversation ---\n\n${lastFewMessages}`;
+
+      console.log(
+        `[CACHE] Invalidating cache for ${persona.name} due to history condensation.`
+      );
+      delete worldState.instructionCache[friendKey];
+    }
   } catch (err) {
     console.error(
       `[Friend Controller Error] API call failed for ${persona.name}:`,
@@ -526,10 +680,17 @@ const postChatMessage = async (req, res) => {
 const getClearChat = (req, res) => {
   const { friend: friendKey } = req.query;
   const { userName } = req.session;
+  const worldState = req.worldState; // Profile is now loaded by middleware
 
-  const worldState = readProfile(userName);
   if (worldState && worldState.chatHistories) {
     delete worldState.chatHistories[friendKey];
+    // Also clear the summary and cache for this chat
+    if (worldState.chatSummaries) {
+      delete worldState.chatSummaries[friendKey];
+    }
+    if (worldState.instructionCache) {
+      delete worldState.instructionCache[friendKey];
+    }
     writeProfile(userName, worldState);
   }
 
@@ -538,12 +699,7 @@ const getClearChat = (req, res) => {
 
 const getApologyPage = (req, res) => {
   const { friend: friendKey } = req.query;
-  const { userName } = req.session;
-
-  const worldState = readProfile(userName);
-  if (!worldState) {
-    return req.session.destroy(() => res.redirect("/"));
-  }
+  const worldState = req.worldState; // Profile is now loaded by middleware
 
   const persona = ALL_PERSONAS.find((p) => p.key === friendKey);
   if (!persona) {
@@ -561,10 +717,7 @@ const postApology = async (req, res) => {
     return res.redirect("/");
   }
 
-  const worldState = readProfile(userName);
-  if (!worldState) {
-    return req.session.destroy(() => res.redirect("/"));
-  }
+  const worldState = req.worldState; // Profile is now loaded by middleware
 
   const persona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
   if (!persona) {
@@ -604,6 +757,11 @@ const postApology = async (req, res) => {
         icon: "/icq-online.gif",
         className: "buddy",
       };
+      // Invalidate cache upon unblocking
+      console.log(
+        `[CACHE] Invalidating cache for ${persona.name} due to unblock.`
+      );
+      delete worldState.instructionCache[friendKey];
       console.log(`[REAL-TIME] ${userName} was unblocked by ${persona.name}.`);
     } else {
       history = `System: (${getTimestamp()}) Your apology was rejected.`;
@@ -632,11 +790,7 @@ const postApology = async (req, res) => {
 };
 
 const getFilesPage = (req, res) => {
-  const { userName } = req.session;
-  const worldState = readProfile(userName);
-  if (!worldState) {
-    return req.session.destroy(() => res.redirect("/"));
-  }
+  const worldState = req.worldState; // Profile is now loaded by middleware
   res.send(renderFilesPage(worldState));
 };
 
@@ -646,10 +800,7 @@ const getCheckImageStatus = (req, res) => {
   const job = global.imageJobs[jobId];
   const showScores = req.session.showScores || false;
 
-  const worldState = readProfile(userName);
-  if (!worldState) {
-    return req.session.destroy(() => res.redirect("/"));
-  }
+  const worldState = req.worldState; // Profile is now loaded by middleware
 
   const persona = ALL_PERSONAS.find((p) => p.key === friendKey);
   if (!persona) {
@@ -711,11 +862,7 @@ const getCheckImageStatus = (req, res) => {
 };
 
 const getAboutPage = (req, res) => {
-  const { userName } = req.session;
-  const worldState = readProfile(userName);
-  if (!worldState) {
-    return req.session.destroy(() => res.redirect("/"));
-  }
+  const worldState = req.worldState; // Profile is now loaded by middleware
   res.send(renderAboutPage(worldState));
 };
 

@@ -2,7 +2,7 @@ const { GoogleGenAI } = require("@google/genai");
 const { UTILITY_BOTS } = require("../config/personas");
 const { renderChatWindowPage } = require("../views/appRenderer");
 const { getTimestamp } = require("../lib/utils");
-const { readProfile, writeProfile } = require("../lib/state-manager");
+const { writeProfile } = require("../lib/state-manager");
 const aiLogic = require("../lib/ai-logic");
 
 const apiKey = process.env.API_KEY;
@@ -11,17 +11,13 @@ if (!apiKey) {
 }
 const ai = new GoogleGenAI({ apiKey });
 
+// --- Timezone Configuration ---
+const TIMEZONE_OFFSET = parseInt(process.env.TIMEZONE_OFFSET, 10) || 0;
+
 async function postBotMessage(req, res) {
   const { prompt, friend: botKey, history: historyBase64 } = req.body;
   const { userName } = req.session;
-
-  const worldState = readProfile(userName);
-  if (!worldState) {
-    console.error(
-      `Logged-in user's profile not found: ${userName}. Forcing logout.`
-    );
-    return req.session.destroy(() => res.redirect("/"));
-  }
+  const worldState = req.worldState; // Profile is now loaded by middleware
 
   const persona = UTILITY_BOTS.find((p) => p.key === botKey);
 
@@ -53,11 +49,12 @@ async function postBotMessage(req, res) {
 
     let systemInstruction;
     if (persona.key === "nostalgia_bot") {
-      // Add time context for schedule awareness
+      // Add time context for schedule awareness, now with timezone support
       const now = new Date();
-      const currentHour = now.getHours();
-      const currentMonth = now.getMonth();
-      const currentDay = now.getDay();
+      const utcHour = now.getUTCHours();
+      const currentHour = (utcHour + TIMEZONE_OFFSET + 24) % 24;
+      const currentMonth = now.getUTCMonth();
+      const currentDay = now.getUTCDay();
       const isSummer = currentMonth >= 6 && currentMonth <= 7; // July-Aug
       const isWeekend = currentDay === 0 || currentDay === 6; // Sun or Sat
       const dayType = isWeekend ? "weekend" : "weekday";
