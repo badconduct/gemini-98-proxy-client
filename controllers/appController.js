@@ -9,11 +9,14 @@ const {
   renderApologyPage,
   renderFilesPage,
   renderAboutPage,
+  renderModernAppShell,
 } = require("../views/appRenderer");
-const { getTimestamp, clamp } = require("../lib/utils");
+const { getTimestamp, clamp, shuffleArray } = require("../lib/utils");
 const { writeProfile } = require("../lib/state-manager");
 const aiLogic = require("../lib/ai-logic");
 const { getRelationshipTier } = require("../lib/ai-logic");
+const { getSimulationConfig } = require("../lib/config-manager");
+const { checkRRatedContent } = require("../lib/content-filter");
 
 const apiKey = process.env.API_KEY;
 if (!apiKey) {
@@ -23,7 +26,6 @@ const ai = new GoogleGenAI({ apiKey });
 
 // --- Timezone Configuration ---
 const TIMEZONE_OFFSET = parseInt(process.env.TIMEZONE_OFFSET, 10) || 0;
-const CONDENSATION_THRESHOLD = 30; // Number of messages before summarizing history
 
 // --- Background Job Functions ---
 
@@ -79,13 +81,6 @@ async function generateImageInBackground(jobId, persona, userName) {
   }
 }
 
-/**
- * Uses Gemini to summarize a long chat history.
- * @param {string} historyText The full chat history text.
- * @param {string} userName The user's name.
- * @param {string} personaName The persona's name.
- * @returns {Promise<string>} The generated summary.
- */
 async function summarizeHistory(historyText, userName, personaName) {
   console.log(
     `[AI] Summarizing chat history between ${userName} and ${personaName}.`
@@ -125,11 +120,6 @@ Provide your summary now.`;
   }
 }
 
-/**
- * Uses Gemini to detect if a user message expresses a strong preference.
- * @param {string} userMessage The user's chat message.
- * @returns {Promise<{action: 'like'|'dislike'|'none', topic: string|null}>} The preference analysis.
- */
 async function analyzeUserPreference(userMessage) {
   const analysisPrompt = `Analyze the following user message to determine if it expresses a strong, direct preference for a topic. The topic should be a noun or noun phrase. Respond ONLY with a JSON object with the keys "action" (either "like", "dislike", or "none") and "topic" (the subject of the preference, normalized to lowercase).
 
@@ -160,20 +150,23 @@ Examples:
 
 // --- Route Handlers ---
 
+const getModernAppShell = (req, res) => {
+  res.send(renderModernAppShell());
+};
+
 const getBuddyListPage = (req, res) => {
-  const worldState = req.worldState; // Profile is now loaded by middleware
+  const worldState = req.worldState;
+  const isFrameView = req.query.view === "frame";
 
   const onlineFriendKeys = [];
   const offlineFriendKeys = [];
 
   const now = new Date();
   const utcHour = now.getUTCHours();
-  // Calculate the hour in the target timezone
   const currentHour = (utcHour + TIMEZONE_OFFSET + 24) % 24;
-  const currentMonth = now.getUTCMonth(); // 0-indexed: July=6, Aug=7
+  const currentMonth = now.getUTCMonth();
   const currentDay = now.getUTCDay();
 
-  // Summer is July and August. School year is Sep-June.
   const isSummer = currentMonth >= 6 && currentMonth <= 7;
   const isWeekend = currentDay === 0 || currentDay === 6;
   const dayTypeKey = isWeekend ? "weekend" : "weekday";
@@ -187,16 +180,13 @@ const getBuddyListPage = (req, res) => {
     let isOnlineNow = false;
     let activeSchedule = [];
 
-    // Robustly determine the active schedule based on the persona's config structure
     if (persona.schedules.schoolYear && persona.schedules.summer) {
-      // Persona has seasonal schedules
       const seasonKey = isSummer ? "summer" : "schoolYear";
       const scheduleSource = persona.schedules[seasonKey];
       if (scheduleSource) {
         activeSchedule = scheduleSource[dayTypeKey] || [];
       }
     } else {
-      // Persona has a single, year-round schedule
       activeSchedule = persona.schedules[dayTypeKey] || [];
     }
 
@@ -204,13 +194,11 @@ const getBuddyListPage = (req, res) => {
       for (const window of activeSchedule) {
         const [start, end] = window;
         if (start <= end) {
-          // Same day window (e.g., [9, 17])
           if (currentHour >= start && currentHour < end) {
             isOnlineNow = true;
             break;
           }
         } else {
-          // Overnight window (e.g., [22, 4])
           if (currentHour >= start || currentHour < end) {
             isOnlineNow = true;
             break;
@@ -231,15 +219,17 @@ const getBuddyListPage = (req, res) => {
       worldState,
       onlineFriendKeys,
       offlineFriendKeys,
-      req.session.isAdmin || false
+      req.session.isAdmin || false,
+      isFrameView
     )
   );
 };
 
 const getChatPage = (req, res) => {
-  const { friend: friendKey, status } = req.query;
+  const { friend: friendKey, status, view } = req.query;
   const { userName } = req.session;
-  const worldState = req.worldState; // Profile is now loaded by middleware
+  const worldState = req.worldState;
+  const isFrameView = view === "frame";
 
   const persona = ALL_PERSONAS.find((p) => p.key === friendKey);
   if (!persona) {
@@ -254,7 +244,6 @@ const getChatPage = (req, res) => {
   let history = worldState.chatHistories[friendKey];
 
   if (!history) {
-    // Create initial history if none exists
     if (isBlocked) {
       history = `System: (${getTimestamp()}) You have been blocked by ${
         persona.name
@@ -279,7 +268,6 @@ const getChatPage = (req, res) => {
     worldState.chatHistories[friendKey] = history;
     writeProfile(userName, worldState);
   } else {
-    // Add a session separator if loading existing history
     history += `\n\nSystem: (${getTimestamp()}) --- Session Resumed ---`;
   }
 
@@ -291,6 +279,7 @@ const getChatPage = (req, res) => {
       isOffline,
       isBlocked,
       showScores: req.session.showScores || false,
+      isFrameView,
     })
   );
 };
@@ -298,7 +287,9 @@ const getChatPage = (req, res) => {
 const postChatMessage = async (req, res) => {
   const { prompt, friend: friendKey, history: historyBase64 } = req.body;
   const { userName } = req.session;
-  const worldState = req.worldState; // Profile is now loaded by middleware
+  let worldState = req.worldState;
+  const isFrameView = req.query.view === "frame";
+  const simulationConfig = getSimulationConfig();
 
   const persona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
   let history = Buffer.from(historyBase64, "base64").toString("utf8");
@@ -316,11 +307,11 @@ const postChatMessage = async (req, res) => {
         history,
         isBlocked: worldState.moderation[friendKey]?.blocked,
         showScores,
+        isFrameView,
       })
     );
   }
 
-  // --- Real-time "Gotta Go" logic with timezone awareness ---
   const now = new Date();
   const utcHour = now.getUTCHours();
   const currentHour = (utcHour + TIMEZONE_OFFSET + 24) % 24;
@@ -330,10 +321,41 @@ const postChatMessage = async (req, res) => {
   const isWeekend = currentDay === 0 || currentDay === 6;
   const dayTypeKey = isWeekend ? "weekend" : "weekday";
 
+  history += `\n\n${userName}: (${getTimestamp()}) ${prompt.trim()}`;
+
+  // --- R-Rated Content Filter ---
+  if (simulationConfig.featureToggles.enableRRatedFilter) {
+    const filterResult = await checkRRatedContent(
+      prompt.trim(),
+      persona,
+      worldState,
+      simulationConfig
+    );
+    if (filterResult.violation) {
+      worldState = filterResult.worldState;
+      history += `\n\n${persona.name}: (${getTimestamp()}) ${
+        filterResult.reply
+      }`;
+
+      worldState.chatHistories[friendKey] = history;
+      writeProfile(userName, worldState);
+
+      return res.send(
+        renderChatWindowPage({
+          persona,
+          worldState,
+          history,
+          isBlocked: worldState.moderation[friendKey]?.blocked,
+          showScores,
+          isFrameView,
+        })
+      );
+    }
+  }
+
   let isStillOnline = false;
   let activeSchedule = [];
 
-  // Robustly determine the active schedule
   if (persona.schedules.schoolYear && persona.schedules.summer) {
     const seasonKey = isSummer ? "summer" : "schoolYear";
     const scheduleSource = persona.schedules[seasonKey];
@@ -364,7 +386,6 @@ const postChatMessage = async (req, res) => {
   if (!isStillOnline) {
     console.log(`[REAL-TIME] ${persona.name} went offline during chat.`);
     const goodbye = persona.goodbyeLine || "Hey, I gotta go now.";
-    history += `\n\n${userName}: (${getTimestamp()}) ${prompt.trim()}`;
     history += `\n\n${persona.name}: (${getTimestamp()}) ${goodbye}`;
     worldState.chatHistories[friendKey] = history;
     writeProfile(userName, worldState);
@@ -381,41 +402,44 @@ const postChatMessage = async (req, res) => {
         isOffline: true,
         showScores,
         statusUpdate,
+        isFrameView,
       })
     );
   }
-  // --- End of "Gotta Go" logic ---
-
-  history += `\n\n${userName}: (${getTimestamp()}) ${prompt.trim()}`;
 
   let statusUpdate = null;
 
   try {
     const contents = aiLogic.buildHistoryForApi(history, userName);
 
-    // --- Caching Logic: Check for a cached instruction ---
-    let systemInstruction = worldState.instructionCache[friendKey];
-    if (!systemInstruction) {
+    let instructionPayload = worldState.instructionCache[friendKey];
+    if (!instructionPayload) {
       console.log(
         `[AI] Instruction cache miss for ${persona.name}. Generating new instruction.`
       );
       const summary = worldState.chatSummaries[friendKey] || null;
-      systemInstruction = aiLogic.generatePersonalizedInstruction(
+      instructionPayload = aiLogic.generatePersonalizedInstruction(
         persona,
         worldState,
         isSummer,
+        simulationConfig,
         summary
       );
-      // Store the newly generated instruction in the cache
-      worldState.instructionCache[friendKey] = systemInstruction;
+      worldState.instructionCache[friendKey] = instructionPayload;
     } else {
       console.log(`[AI] Instruction cache hit for ${persona.name}.`);
     }
+
+    const { systemInstruction, safetySettings } = instructionPayload;
 
     const config = {
       systemInstruction,
       responseMimeType: "application/json",
     };
+
+    if (safetySettings) {
+      config.safetySettings = safetySettings;
+    }
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-04-17",
@@ -445,7 +469,9 @@ const postChatMessage = async (req, res) => {
       worldState.chatHistories[friendKey] = history;
       writeProfile(userName, worldState);
 
-      const metaRefreshTag = `<meta http-equiv="refresh" content="15; URL=/check-image?jobId=${jobId}&friend=${friendKey}">`;
+      let refreshUrl = `/check-image?jobId=${jobId}&friend=${friendKey}`;
+      if (isFrameView) refreshUrl += "&view=frame";
+      const metaRefreshTag = `<meta http-equiv="refresh" content="15; URL=${refreshUrl}">`;
 
       return res.send(
         renderChatWindowPage({
@@ -454,11 +480,11 @@ const postChatMessage = async (req, res) => {
           history,
           metaRefreshTag,
           showScores,
+          isFrameView,
         })
       );
     }
 
-    // --- Advanced Dating & Social Logic ---
     if (parsed.cheatingDetected === true) {
       console.log(`[SOCIAL] Cheating by ${userName} detected!`);
       const currentPartners = FRIEND_PERSONAS.filter(
@@ -466,7 +492,8 @@ const postChatMessage = async (req, res) => {
       );
       currentPartners.forEach((partner) => {
         worldState.relationships[partner.key].dating = null;
-        worldState.userScores[partner.key] = 10;
+        worldState.userScores[partner.key] =
+          simulationConfig.datingRules.cheatingPenaltyScore;
         console.log(
           `[CACHE] Invalidating cache for ${partner.name} due to cheating.`
         );
@@ -510,24 +537,35 @@ const postChatMessage = async (req, res) => {
         (sourcePersona.group === "student" ||
           sourcePersona.group === "townie_alumni")
       ) {
-        const gossipGroup = FRIEND_PERSONAS.filter(
-          (p) => p.group === sourcePersona.group && p.key !== sourcePersona.key
-        );
-        console.log(
-          `[GOSSIP] ${sourcePersona.name} is telling ${gossipGroup.length} other people in their group.`
-        );
-        gossipGroup.forEach((member) => {
-          if (!worldState.ageKnowledge[member.key]) {
-            worldState.ageKnowledge[member.key] = {
-              knows: true,
-              source: friendKey,
-            };
-            console.log(
-              `[CACHE] Invalidating cache for ${member.name} due to gossip.`
-            );
-            delete worldState.instructionCache[member.key];
-          }
-        });
+        const { gossipChance, gossipScope } = simulationConfig.socialRules;
+        if (Math.random() < gossipChance) {
+          const gossipGroup = FRIEND_PERSONAS.filter(
+            (p) =>
+              p.group === sourcePersona.group && p.key !== sourcePersona.key
+          );
+          const shuffledGroup = shuffleArray(gossipGroup);
+          const targets = shuffledGroup.slice(0, gossipScope);
+
+          console.log(
+            `[GOSSIP] Gossip triggered! ${sourcePersona.name} is telling ${targets.length} other people in their group.`
+          );
+          targets.forEach((member) => {
+            if (!worldState.ageKnowledge[member.key]) {
+              worldState.ageKnowledge[member.key] = {
+                knows: true,
+                source: friendKey,
+              };
+              console.log(
+                `[CACHE] Invalidating cache for ${member.name} due to gossip.`
+              );
+              delete worldState.instructionCache[member.key];
+            }
+          });
+        } else {
+          console.log(
+            `[GOSSIP] Gossip chance failed. ${sourcePersona.name} keeps the secret.`
+          );
+        }
       }
     }
 
@@ -538,9 +576,8 @@ const postChatMessage = async (req, res) => {
     worldState.userScores[friendKey] = clamp(oldScore + change, 0, 100);
     const newScore = worldState.userScores[friendKey];
 
-    // --- Cache & Status Update Logic ---
-    const oldTier = getRelationshipTier(oldScore);
-    const newTier = getRelationshipTier(newScore);
+    const oldTier = getRelationshipTier(simulationConfig, oldScore);
+    const newTier = getRelationshipTier(simulationConfig, newScore);
     if (oldTier !== newTier) {
       console.log(
         `[CACHE] Invalidating cache for ${persona.name} due to relationship tier change (${oldTier} -> ${newTier}).`
@@ -548,7 +585,10 @@ const postChatMessage = async (req, res) => {
       invalidateCache = true;
     }
 
-    if (newScore <= 0 && oldScore > 0) {
+    if (
+      newScore <= simulationConfig.socialRules.hostileThreshold &&
+      oldScore > simulationConfig.socialRules.hostileThreshold
+    ) {
       worldState.moderation[friendKey].blocked = true;
       statusUpdate = {
         key: friendKey,
@@ -556,21 +596,25 @@ const postChatMessage = async (req, res) => {
         className: "buddy blocked-buddy",
       };
       console.log(`[REAL-TIME] ${userName} was blocked by ${persona.name}.`);
-    } else if (newScore === 100 && oldScore < 100) {
+    } else if (
+      newScore >= simulationConfig.socialRules.bffThreshold &&
+      oldScore < simulationConfig.socialRules.bffThreshold
+    ) {
       statusUpdate = {
         key: friendKey,
         icon: isStillOnline ? "/icq-bff.gif" : "/icq-offline.gif",
         className: isStillOnline ? "buddy bff-buddy" : "buddy offline-buddy",
       };
       console.log(`[REAL-TIME] ${userName} is now BFFs with ${persona.name}.`);
-    } else if (newScore < 100 && oldScore === 100) {
-      // They are no longer BFFs
+    } else if (
+      newScore < simulationConfig.socialRules.bffThreshold &&
+      oldScore >= simulationConfig.socialRules.bffThreshold
+    ) {
       statusUpdate = {
         key: friendKey,
         icon: isStillOnline ? "/icq-online.gif" : "/icq-offline.gif",
         className: isStillOnline ? "buddy" : "buddy offline-buddy",
       };
-      // Automatic breakup logic
       if (worldState.relationships[friendKey]?.dating === "user_player") {
         console.log(
           `[SOCIAL] ${persona.name} broke up with ${userName} because their score dropped.`
@@ -579,12 +623,12 @@ const postChatMessage = async (req, res) => {
           persona.name
         } is no longer your partner because your friendship cooled.`;
         worldState.relationships[friendKey].dating = null;
-        // Check for ex forgiveness
         const exPartnerKey =
           worldState.relationships[friendKey].previousPartner;
         if (exPartnerKey) {
           worldState.userScores[exPartnerKey] = clamp(
-            worldState.userScores[exPartnerKey] + 40,
+            worldState.userScores[exPartnerKey] +
+              simulationConfig.datingRules.breakupForgivenessBonus,
             0,
             100
           );
@@ -604,34 +648,31 @@ const postChatMessage = async (req, res) => {
 
     history += `\n\n${persona.name}: (${getTimestamp()}) ${reply.trim()}`;
 
-    // --- Preference System Logic (runs after adding reply, before writing profile) ---
-    const preference = await analyzeUserPreference(prompt.trim());
-    if (preference.action === "like" && preference.topic) {
-      // Only add a new "like" if it's not already in dislikes (to avoid instant contradiction)
-      // and not already in likes.
-      if (
-        !worldState.userDislikes[preference.topic] &&
-        !worldState.userLikes[preference.topic]
-      ) {
-        console.log(
-          `[PREFERENCE] User likes '${preference.topic}'. Told to ${persona.name}.`
-        );
-        worldState.userLikes[preference.topic] = friendKey;
-      }
-    } else if (preference.action === "dislike" && preference.topic) {
-      // Only add a new "dislike" if it's not already in likes.
-      if (
-        !worldState.userLikes[preference.topic] &&
-        !worldState.userDislikes[preference.topic]
-      ) {
-        console.log(
-          `[PREFERENCE] User dislikes '${preference.topic}'. Told to ${persona.name}.`
-        );
-        worldState.userDislikes[preference.topic] = friendKey;
+    if (simulationConfig.featureToggles.enableHonestySystem) {
+      const preference = await analyzeUserPreference(prompt.trim());
+      if (preference.action === "like" && preference.topic) {
+        if (
+          !worldState.userDislikes[preference.topic] &&
+          !worldState.userLikes[preference.topic]
+        ) {
+          console.log(
+            `[PREFERENCE] User likes '${preference.topic}'. Told to ${persona.name}.`
+          );
+          worldState.userLikes[preference.topic] = friendKey;
+        }
+      } else if (preference.action === "dislike" && preference.topic) {
+        if (
+          !worldState.userLikes[preference.topic] &&
+          !worldState.userDislikes[preference.topic]
+        ) {
+          console.log(
+            `[PREFERENCE] User dislikes '${preference.topic}'. Told to ${persona.name}.`
+          );
+          worldState.userDislikes[preference.topic] = friendKey;
+        }
       }
     }
 
-    // --- History Condensation Logic (runs after adding new reply) ---
     const messages = history.split(
       /\n\n(?=(?:System:|Image:|(?:[^:]+:\s\([^)]+\)\s)))/
     );
@@ -639,7 +680,11 @@ const postChatMessage = async (req, res) => {
       (line) => !line.startsWith("System:") && !line.startsWith("Image:")
     ).length;
 
-    if (messageCount > CONDENSATION_THRESHOLD) {
+    if (
+      simulationConfig.featureToggles.enableHistoryCondensation &&
+      messageCount >
+        simulationConfig.systemSettings.historyCondensationThreshold
+    ) {
       console.log(
         `[HISTORY] Condensation triggered for ${persona.name}. Message count: ${messageCount}`
       );
@@ -673,18 +718,19 @@ const postChatMessage = async (req, res) => {
       isBlocked: worldState.moderation[friendKey]?.blocked,
       showScores,
       statusUpdate,
+      isFrameView,
     })
   );
 };
 
 const getClearChat = (req, res) => {
-  const { friend: friendKey } = req.query;
+  const { friend: friendKey, view } = req.query;
   const { userName } = req.session;
-  const worldState = req.worldState; // Profile is now loaded by middleware
+  const worldState = req.worldState;
+  const isFrameView = view === "frame";
 
   if (worldState && worldState.chatHistories) {
     delete worldState.chatHistories[friendKey];
-    // Also clear the summary and cache for this chat
     if (worldState.chatSummaries) {
       delete worldState.chatSummaries[friendKey];
     }
@@ -694,13 +740,14 @@ const getClearChat = (req, res) => {
     writeProfile(userName, worldState);
   }
 
-  res.redirect(`/chat?friend=${friendKey}`);
+  let redirectUrl = `/chat?friend=${friendKey}`;
+  if (isFrameView) redirectUrl += "&view=frame";
+  res.redirect(redirectUrl);
 };
 
 const getApologyPage = (req, res) => {
   const { friend: friendKey } = req.query;
-  const worldState = req.worldState; // Profile is now loaded by middleware
-
+  const worldState = req.worldState;
   const persona = ALL_PERSONAS.find((p) => p.key === friendKey);
   if (!persona) {
     return res.status(404).send("Error: Friend not found.");
@@ -717,8 +764,7 @@ const postApology = async (req, res) => {
     return res.redirect("/");
   }
 
-  const worldState = req.worldState; // Profile is now loaded by middleware
-
+  const worldState = req.worldState;
   const persona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
   if (!persona) {
     return res.status(404).send("Error: Friend not found.");
@@ -757,7 +803,6 @@ const postApology = async (req, res) => {
         icon: "/icq-online.gif",
         className: "buddy",
       };
-      // Invalidate cache upon unblocking
       console.log(
         `[CACHE] Invalidating cache for ${persona.name} due to unblock.`
       );
@@ -790,17 +835,18 @@ const postApology = async (req, res) => {
 };
 
 const getFilesPage = (req, res) => {
-  const worldState = req.worldState; // Profile is now loaded by middleware
+  const worldState = req.worldState;
   res.send(renderFilesPage(worldState));
 };
 
 const getCheckImageStatus = (req, res) => {
-  const { jobId, friend: friendKey } = req.query;
+  const { jobId, friend: friendKey, view } = req.query;
   const { userName } = req.session;
   const job = global.imageJobs[jobId];
   const showScores = req.session.showScores || false;
+  const isFrameView = view === "frame";
 
-  const worldState = req.worldState; // Profile is now loaded by middleware
+  const worldState = req.worldState;
 
   const persona = ALL_PERSONAS.find((p) => p.key === friendKey);
   if (!persona) {
@@ -815,7 +861,13 @@ const getCheckImageStatus = (req, res) => {
     worldState.chatHistories[friendKey] = history;
     writeProfile(userName, worldState);
     return res.send(
-      renderChatWindowPage({ persona, worldState, history, showScores })
+      renderChatWindowPage({
+        persona,
+        worldState,
+        history,
+        showScores,
+        isFrameView,
+      })
     );
   }
 
@@ -826,8 +878,9 @@ const getCheckImageStatus = (req, res) => {
     `System: (${getTimestamp()}) You are now chatting with ${persona.name}.`;
 
   if (status === "pending") {
-    const metaRefreshTag = `<meta http-equiv="refresh" content="15; URL=/check-image?jobId=${jobId}&friend=${friendKey}">`;
-    // No change to history, just re-render with polling tag
+    let refreshUrl = `/check-image?jobId=${jobId}&friend=${friendKey}`;
+    if (isFrameView) refreshUrl += "&view=frame";
+    const metaRefreshTag = `<meta http-equiv="refresh" content="15; URL=${refreshUrl}">`;
     return res.send(
       renderChatWindowPage({
         persona,
@@ -835,6 +888,7 @@ const getCheckImageStatus = (req, res) => {
         history,
         metaRefreshTag,
         showScores,
+        isFrameView,
       })
     );
   }
@@ -857,12 +911,20 @@ const getCheckImageStatus = (req, res) => {
 
   worldState.chatHistories[friendKey] = history;
   writeProfile(userName, worldState);
-  delete global.imageJobs[jobId]; // Clean up completed/failed job
-  res.send(renderChatWindowPage({ persona, worldState, history, showScores }));
+  delete global.imageJobs[jobId];
+  res.send(
+    renderChatWindowPage({
+      persona,
+      worldState,
+      history,
+      showScores,
+      isFrameView,
+    })
+  );
 };
 
 const getAboutPage = (req, res) => {
-  const worldState = req.worldState; // Profile is now loaded by middleware
+  const worldState = req.worldState;
   res.send(renderAboutPage(worldState));
 };
 
@@ -876,4 +938,5 @@ module.exports = {
   getFilesPage,
   getCheckImageStatus,
   getAboutPage,
+  getModernAppShell,
 };

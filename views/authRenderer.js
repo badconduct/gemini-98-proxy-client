@@ -5,14 +5,38 @@ const { renderDialogWindow } = require("./components");
 function renderLauncherPage(
   profiles = [],
   error = null,
-  guestModeEnabled = true
+  guestModeEnabled = true,
+  isModernBrowser = false,
+  isGuestOnlyMode = false
 ) {
   const title = "Gemini 98 - Launcher";
   const header = "ICQ98 Network Login";
 
-  // The login form is now always a text input for security.
-  const formContent = `
+  const modernFriendlyOption = isModernBrowser
+    ? `
+    <div style="text-align: center; margin-bottom: 15px; font-size: 11px;">
+        <input type="checkbox" id="modern-view-checkbox" name="view_mode" value="modern" checked>
+        <label for="modern-view-checkbox">Use Modern Friendly View (no pop-ups)</label>
+    </div>
+  `
+    : "";
+
+  let formContent = `
+        <div style="text-align: center; margin-bottom: 20px;">
+          <p>This is a public demo. Please log in as a guest.</p>
+        </div>
+    `;
+
+  let mainButtonsHtml = `
+      <div class="button-container">
+          <a href="/guest-login">Login as Guest</a>
+      </div>
+  `;
+
+  if (!isGuestOnlyMode) {
+    formContent = `
         <form action="/login" method="POST">
+            ${modernFriendlyOption}
             <table class="form-table" cellpadding="0" cellspacing="0" style="width: 100%;">
                 <tr>
                     <td style="text-align: right; font-weight: bold; width: 100px;"><label for="userName-input">User Name:</label></td>
@@ -27,14 +51,22 @@ function renderLauncherPage(
                 <input type="submit" value="Login">
             </div>
         </form>
-    `;
+      `;
 
-  const newUserButtonText =
-    profiles.length === 0 ? "Create Administrator" : "New Profile";
+    const newUserButtonText =
+      profiles.length === 0 ? "Create Administrator" : "New Profile";
 
-  const guestButtonHtml = guestModeEnabled
-    ? `<a href="/guest-login">Login as Guest</a>`
-    : `<span style="display:inline-block; width: 120px;"></span>`; // Placeholder to keep alignment
+    const guestButtonHtml = guestModeEnabled
+      ? `<a href="/guest-login">Login as Guest</a>`
+      : `<span style="display:inline-block; width: 120px;"></span>`;
+
+    mainButtonsHtml = `
+        <div class="button-container">
+            <a href="/new-user">${newUserButtonText}</a>
+            ${guestButtonHtml}
+        </div>
+      `;
+  }
 
   const bodyContent = `
       <div style="text-align: center; margin-bottom: 20px;">
@@ -42,10 +74,7 @@ function renderLauncherPage(
       </div>
       ${error ? `<div class="error-message">${escapeHtml(error)}</div>` : ""}
       ${formContent}
-      <div class="button-container">
-          <a href="/new-user">${newUserButtonText}</a>
-          ${guestButtonHtml}
-      </div>
+      ${mainButtonsHtml}
     `;
 
   return renderDialogWindow({ title, header, bodyContent });
@@ -78,7 +107,7 @@ function renderNewUserPage(error = null, isFirstUser = false) {
   return renderDialogWindow({ title, header, bodyContent });
 }
 
-function renderLoginSuccessPage() {
+function renderLoginSuccessPage(isModernView = false) {
   const title = "Launch Successful";
   const styles = `
       html, body { height: 100%; margin: 0; padding: 0; }
@@ -90,6 +119,32 @@ function renderLoginSuccessPage() {
       p { font-size: 12px; margin-bottom: 20px; line-height: 1.4; }
       img { margin-bottom: 10px; }
     `;
+
+  let script;
+  if (isModernView) {
+    // For modern view, just redirect the main window.
+    script = `window.location.href = '/app';`;
+  } else {
+    // For retro view, use the pop-up.
+    script = `
+          try {
+              var buddyWindow = window.open('/buddylist', 'buddy_list_main', 'width=300,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes');
+              if (buddyWindow) {
+                  buddyWindow.focus();
+              } else {
+                   var contentDiv = document.getElementById('content');
+                   if(contentDiv) {
+                      contentDiv.innerHTML = '<h2>Launch Failed!</h2><p>A popup blocker may have prevented the application from launching. Please allow popups for this site and try again.</p>';
+                   }
+              }
+          } catch (e) {
+              var contentDiv = document.getElementById('content');
+              if(contentDiv) {
+                  contentDiv.innerHTML = '<h2>Launch Failed!</h2><p>An unexpected error occurred while launching the application.</p>';
+              }
+          }
+      `;
+  }
 
   const body = `
       <table class="center-container" cellpadding="0" cellspacing="0">
@@ -107,24 +162,6 @@ function renderLoginSuccessPage() {
       </table>
     `;
 
-  const script = `
-        try {
-            var buddyWindow = window.open('/buddylist', 'buddy_list_main', 'width=300,height=550,toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes');
-            if (buddyWindow) {
-                buddyWindow.focus();
-            } else {
-                 var contentDiv = document.getElementById('content');
-                 if(contentDiv) {
-                    contentDiv.innerHTML = '<h2>Launch Failed!</h2><p>A popup blocker may have prevented the application from launching. Please allow popups for this site and try again.</p>';
-                 }
-            }
-        } catch (e) {
-            var contentDiv = document.getElementById('content');
-            if(contentDiv) {
-                contentDiv.innerHTML = '<h2>Launch Failed!</h2><p>An unexpected error occurred while launching the application.</p>';
-            }
-        }
-    `;
   return renderHtmlPage({ title, styles, body, scripts: script });
 }
 

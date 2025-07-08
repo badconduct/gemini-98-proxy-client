@@ -1,9 +1,7 @@
 const fs = require("fs");
 const path = require("path");
-const {
-  renderUsersPage,
-  renderOptionsPage,
-} = require("../views/adminRenderer");
+const { renderUsersPage } = require("../views/adminRenderer");
+const { renderOptionsPage } = require("../views/optionsRenderer");
 const {
   listProfiles,
   readProfile,

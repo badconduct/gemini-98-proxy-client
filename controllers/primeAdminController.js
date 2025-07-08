@@ -112,6 +112,7 @@ const postSaveChanges = (req, res) => {
     enableHistoryCondensation:
       !!req.body.featureToggles_enableHistoryCondensation,
     enableHonestySystem: !!req.body.featureToggles_enableHonestySystem,
+    enableRRatedFilter: !!req.body.featureToggles_enableRRatedFilter,
   };
 
   const datingLockouts = {

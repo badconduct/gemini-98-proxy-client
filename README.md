@@ -48,9 +48,10 @@ The core of the application is a dynamic rules engine that generates unique syst
 - **Age-Based Logic:** The simulation's rules change based on your age.
   - **Ages 14-19 (Student):** You're an insider with other students, starting with higher relationship scores.
   - **Ages 20-39 (Townie/Alumni):** You have a natural rapport with the other townies.
-  - **Ages <=13 or >=40 (Online Friend):** Local AI friends will be suspicious of you. If you reveal you're under 14, they'll become patronizing. If you reveal you're over 40, students will find you "creepy" and their opinion of you will permanently decrease with every interaction.
-- **Gossip Mechanic:** When you reveal your true age to a local friend (a Student or Townie), they'll tell others in their social group! This creates a dynamic world where information spreads and your reputation can change based on who you trust.
+  - **Ages <=13 or >=40 (Online Friend):** Local AI friends will be suspicious of you. If you reveal you're under 14, they'll become patronizing. If you reveal you're over 40, students will find you "creepy" and their opinion of you will permanently decrease with every interaction (this penalty can be disabled via `.env` settings).
+- **Gossip Mechanic:** When you reveal your true age to a local friend (a Student or Townie), they might tell others in their social group! This creates a dynamic world where information spreads and your reputation can change based on who you trust. The chance and scope of gossip are configurable.
 - **Honesty & Preference System:** The simulation now learns your tastes. When you express a strong like or dislike for a topic (music, movies, etc.), the system remembers it. Be careful what you say to whom! If you tell one friend you hate pop music and another that you love it, the gossip network will catch your contradiction. Characters will call you out for being fake, resulting in a one-time relationship penalty. Stay consistent to maintain your reputation!
+- **R-Rated Content Filter:** The simulation includes a content filter that detects and penalizes discussions related to drugs, violence, and inappropriate sexual advances, with unique rules for different relationship levels. This can be toggled by the Prime Admin.
 - **Relationship Score:** Your conversations directly impact your relationship score with each friend, unlocking different conversational paths and behaviors.
 - **Dating & Consequences:** You can date student characters if your friendship is high enough. This has real consequences, including potential breakups, jilted ex-lovers, and getting caught if you date more than one person at a time.
 
@@ -79,21 +80,42 @@ The first user created becomes the **Prime Administrator** with access to powerf
     npm install
     ```
 
-3.  **Add your Gemini API key & Configuration**
-    Create a `.env` file in the project root with your API key, a session secret, and any optional settings:
+3.  **Create your `.env` configuration file**
+    Create a `.env` file in the project root. You can use the example below as a template—just fill in your own API key and session secret.
 
-    ```
-    # Required
-    API_KEY=your-gemini-api-key
-    SESSION_SECRET=a-long-random-string-for-security
+    **Example `.env` file:**
 
-    # Optional: Set this to your local UTC offset to ensure schedules are correct.
+    ```env
+    # --- Required Settings ---
+    # Your Gemini API key from Google AI Studio.
+    API_KEY=your-gemini-api-key-goes-here
+
+    # A long, random string for session security. Generate one easily online.
+    SESSION_SECRET=a-very-long-and-random-string-for-better-security
+
+    # --- Convenience Settings (Optional) ---
+    # Set this to your local UTC offset to ensure AI schedules are correct.
     # Examples: -4 for EDT, -5 for EST, -7 for PDT, 1 for CET. Defaults to 0 (UTC).
     TIMEZONE_OFFSET=-5
 
-    # Optional: For single-user convenience.
     # Bypasses the login screen and automatically logs in as the Prime Admin.
-    SINGLE_USER_MODE=true
+    # Useful for private, personal use where you are the only user.
+    SINGLE_USER_MODE=false
+
+    # --- Server Operator Settings (Optional) ---
+    # WARNING: Use at your own risk. Disabling the safety filter will allow the AI to generate
+    # responses that may be inappropriate or offensive. This also disables the "creepy age" penalty.
+    # This setting is for creative exploration and should be used responsibly. Inappropriate use may
+    # lead to suspension of your API key.
+    DISABLE_SAFETY_FILTERS=false
+
+    # --- Public Hosting / Demo Mode Settings (Optional) ---
+    # Disables the /primeadmin portal completely for added security.
+    DISABLE_PRIME_ADMIN=false
+
+    # Hides the normal user login/registration, leaving only the "Login as Guest" button.
+    # Recommended to be set to `true` along with DISABLE_PRIME_ADMIN for public demos.
+    PUBLIC_GUEST_ONLY_MODE=false
     ```
 
 4.  **Start the server**
@@ -111,9 +133,18 @@ The first user created becomes the **Prime Administrator** with access to powerf
 
 ---
 
-## ⚠️ Security & Deployment
+## ⚠️ Security & Public Deployment
 
-This application is designed for personal or private group use. The current registration system is open by default. **If you plan to deploy this to a public server, it is strongly recommended that you implement an invitation code system** to prevent abuse of your API key.
+This application is designed for personal or private group use. The current registration system is open by default.
+
+**If you plan to deploy this to a public server for demo purposes, it is strongly recommended that you use the built-in safety features.** In your `.env` file, set:
+
+```
+DISABLE_PRIME_ADMIN=true
+PUBLIC_GUEST_ONLY_MODE=true
+```
+
+This will create a safe, public-facing demo where users can only log in as temporary guests and the powerful administration portals are completely disabled.
 
 ---
 

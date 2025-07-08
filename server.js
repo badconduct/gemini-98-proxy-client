@@ -16,6 +16,10 @@ const { UTILITY_BOTS } = require("./config/personas");
 
 // --- Configuration ---
 const port = process.env.PORT || 3000;
+const SINGLE_USER_MODE = process.env.SINGLE_USER_MODE === "true";
+const DISABLE_PRIME_ADMIN = process.env.DISABLE_PRIME_ADMIN === "true";
+const PUBLIC_GUEST_ONLY_MODE = process.env.PUBLIC_GUEST_ONLY_MODE === "true";
+
 global.imageJobs = {}; // In-memory store for image generation job status
 
 // --- Directory Setup ---
@@ -66,10 +70,19 @@ app.use(
 app.use((req, res, next) => {
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self';"
   );
   next();
 });
+
+// --- Browser Detection Middleware ---
+const detectModernBrowser = (req, res, next) => {
+  const userAgent = req.get("User-Agent") || "";
+  // A simple check. If it's not IE, we'll assume it's modern.
+  // This allows us to offer the modern-friendly view.
+  req.isModernBrowser = !userAgent.includes("MSIE");
+  next();
+};
 
 // --- Auth Middleware ---
 const requireLogin = (req, res, next) => {
@@ -126,15 +139,24 @@ const postChatDispatcher = (req, res) => {
 };
 
 // --- Public Routes ---
-app.get("/", authController.getLauncherPage);
-app.get("/new-user", authController.getNewUserPage);
-app.post("/create-user", authController.postCreateUser);
-app.post("/login", authController.postLogin);
+app.get("/", detectModernBrowser, (req, res) => {
+  if (SINGLE_USER_MODE) {
+    return authController.getSingleUserLogin(req, res);
+  }
+  return authController.getLauncherPage(req, res);
+});
+
+if (!PUBLIC_GUEST_ONLY_MODE) {
+  app.get("/new-user", detectModernBrowser, authController.getNewUserPage);
+  app.post("/create-user", authController.postCreateUser);
+  app.post("/login", authController.postLogin);
+}
+
 app.get("/guest-login", authController.getGuestLogin);
 app.get("/logout", authController.getLogout);
 
 // --- Protected App Routes ---
-// Note: loadProfile is added after requireLogin
+app.get("/app", requireLogin, appController.getModernAppShell); // New route for the modern shell
 app.get(
   "/buddylist",
   requireLogin,
@@ -188,23 +210,25 @@ app.get(
 );
 
 // --- Prime Admin Portal Routes ---
-app.get("/primeadmin", primeAdminController.getLoginPage);
-app.post("/primeadmin/login", primeAdminController.postLogin);
-app.get(
-  "/primeadmin/dashboard",
-  requirePrimePortalAuth,
-  primeAdminController.getDashboardPage
-);
-app.post(
-  "/primeadmin/save",
-  requirePrimePortalAuth,
-  primeAdminController.postSaveChanges
-);
-app.post(
-  "/primeadmin/reset",
-  requirePrimePortalAuth,
-  primeAdminController.postResetToDefaults
-);
+if (!DISABLE_PRIME_ADMIN) {
+  app.get("/primeadmin", primeAdminController.getLoginPage);
+  app.post("/primeadmin/login", primeAdminController.postLogin);
+  app.get(
+    "/primeadmin/dashboard",
+    requirePrimePortalAuth,
+    primeAdminController.getDashboardPage
+  );
+  app.post(
+    "/primeadmin/save",
+    requirePrimePortalAuth,
+    primeAdminController.postSaveChanges
+  );
+  app.post(
+    "/primeadmin/reset",
+    requirePrimePortalAuth,
+    primeAdminController.postResetToDefaults
+  );
+}
 
 // --- Asset Routes ---
 app.get("/icq-logo.gif", (req, res) => {
@@ -349,6 +373,19 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, HOST, () => {
   console.log(`Server running at http://${HOST}:${PORT}`);
+  if (SINGLE_USER_MODE) {
+    console.log("--- SINGLE USER MODE is ENABLED ---");
+    console.log(
+      "Application will automatically log in as the Prime Administrator."
+    );
+  }
+  if (PUBLIC_GUEST_ONLY_MODE) {
+    console.log("--- PUBLIC GUEST-ONLY MODE is ENABLED ---");
+    console.log("Standard user login and registration are disabled.");
+  }
+  if (DISABLE_PRIME_ADMIN) {
+    console.log("--- PRIME ADMIN PORTAL is DISABLED ---");
+  }
   console.log(
     `Guest profile cleanup will run every ${CLEANUP_INTERVAL_MINUTES} minutes.`
   );

@@ -10,7 +10,8 @@ function renderBuddyListPage(
   worldState,
   onlineFriendKeys,
   offlineFriendKeys,
-  isAdmin = false
+  isAdmin = false,
+  isFrameView = false
 ) {
   const { userName } = worldState;
 
@@ -34,11 +35,12 @@ function renderBuddyListPage(
         }
 
         const statusParam = useOfflineIcon ? "&status=offline" : "";
-        const url = `/chat?friend=${persona.key}${statusParam}`;
+
+        let url = `/chat?friend=${persona.key}${statusParam}`;
+        if (isFrameView) url += "&view=frame";
 
         let cssClass = "buddy";
         if (isBFF && !useOfflineIcon) {
-          // A BFF is only styled special if they are online
           cssClass += " bff-buddy";
         } else if (isBlocked) {
           cssClass += " blocked-buddy";
@@ -46,7 +48,9 @@ function renderBuddyListPage(
           cssClass += " offline-buddy";
         }
 
-        const onclick = isBlocked
+        const onclick = isFrameView
+          ? `parent.frames['chat_frame'].location.href='${url}'; return false;`
+          : isBlocked
           ? `window.open('/apology?friend=${persona.key}', 'apology_${persona.key}', 'width=400,height=300,resizable=yes,scrollbars=yes'); return false;`
           : `window.open('${url}', 'chat_${persona.key}', 'width=520,height=600,resizable=yes,scrollbars=yes'); return false;`;
 
@@ -55,7 +59,6 @@ function renderBuddyListPage(
           : persona.name;
         const title = persona.screenName ? persona.name : "";
 
-        // Add unique IDs for real-time updates
         return `<div id="buddy-container-${key}" class="${cssClass}"><img id="buddy-icon-${key}" src="${icon}" alt="Status"><a href="#" title="${escapeHtml(
           title
         )}" onclick="${onclick}">${escapeHtml(displayName)}</a></div>`;
@@ -71,7 +74,6 @@ function renderBuddyListPage(
 
   let friendsHtml = "";
   friendGroups.forEach((groupInfo) => {
-    // Elion is special and should be handled with the 'online' group visually, but is exempt from logic.
     const groupPersonas = FRIEND_PERSONAS.filter(
       (p) => p.group === groupInfo.id
     );
@@ -154,7 +156,6 @@ function renderBuddyListPage(
     `;
 
   const scripts = `
-      // This function can be called by child windows (chats) to update the main buddy list in real-time.
       function updateBuddyStatus(friendKey, newIcon, newClassName) {
           try {
               var buddyDiv = document.getElementById('buddy-container-' + friendKey);
@@ -169,6 +170,16 @@ function renderBuddyListPage(
       }
     `;
 
+  if (isFrameView) {
+    return renderHtmlPage({
+      title: `${escapeHtml(userName)}'s Buddy List`,
+      styles,
+      body,
+      scripts,
+      metaRefreshTag: "", // No refresh for framed view
+    });
+  }
+
   return renderHtmlPage({
     title: `${escapeHtml(userName)}'s Buddy List`,
     styles,
@@ -179,8 +190,6 @@ function renderBuddyListPage(
 }
 
 function renderChatMessagesHtml(history, userName) {
-  // Regex to split on the newline that precedes a new message header.
-  // This keeps multi-line messages (like poems) intact.
   const messages = history.split(
     /\n\n(?=(?:System:|Image:|(?:[^:]+:\s\([^)]+\)\s)))/
   );
@@ -209,7 +218,6 @@ function renderChatMessagesHtml(history, userName) {
       const className =
         sender.trim() === userName ? "message-user" : "message-bot";
 
-      // Process newlines correctly by escaping first, then replacing \n with <br />
       const processedMessage = escapeHtml(message.trim()).replace(
         /\n/g,
         "<br />"
@@ -237,7 +245,8 @@ function renderChatWindowPage({
   isBlocked = false,
   metaRefreshTag = "",
   showScores = false,
-  statusUpdate = null, // New parameter for real-time updates
+  statusUpdate = null,
+  isFrameView = false,
 }) {
   const { userName } = worldState;
   const friendKey = persona.key;
@@ -254,7 +263,7 @@ function renderChatWindowPage({
     relationshipScoreText = `Relationship: ${worldState.userScores[friendKey]}/100`;
   }
 
-  const isDisabled = isOffline || isBlocked || metaRefreshTag !== ""; // Also disable input while polling
+  const isDisabled = isOffline || isBlocked || metaRefreshTag !== "";
 
   let promptText = "";
   if (isBlocked) {
@@ -269,27 +278,23 @@ function renderChatWindowPage({
       }`
     : escapeHtml(persona.name);
 
+  let postAction = "/chat";
+  if (isFrameView) postAction += `?view=frame`;
+
   const styles = `
       body { background-color: #008080; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 10px; margin: 0; padding: 0; }
-      /* Table-based layout for IE6 compatibility */
       #chat-table { width: 100%; border-collapse: collapse; border: 2px solid #000000; border-top-color: #FFFFFF; border-left-color: #FFFFFF; background-color: #C0C0C0; }
       #header-td { height: 1px; padding: 3px 3px 0 3px; }
       #messages-td { padding: 3px; }
       #form-td { height: 1px; padding: 0 3px 3px 3px; }
-      
-      /* Header styles */
       #header { height: 24px; background: #000080; color: #FFFFFF; font-size: 12px; font-weight: bold; line-height: 24px; padding: 0 8px; }
       #header img { vertical-align: middle; margin-right: 8px; }
-
-      /* Message area styles */
       #chat-messages { width: 100%; box-sizing: border-box; overflow-y: scroll; border: 2px inset #808080; background-color: #FFFFE1; padding: 10px; text-align: left; }
       .message { margin-bottom: 5px; white-space: normal; word-wrap: break-word; }
       .message-user { color: #0000FF; text-align: right; }
       .message-bot { color: #FF0000; text-align: left; }
       .message-system { color: #808080; font-style: italic; text-align: center; }
       .message img { max-width: 100%; height: auto; }
-
-      /* Input form styles */
       #input-form { height: 80px; }
       #prompt-input { width: 100%; height: 50px; box-sizing: border-box; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 10px; border: 2px inset #808080; }
       #prompt-input.disabled { background-color: #C0C0C0; }
@@ -297,9 +302,11 @@ function renderChatWindowPage({
       #send-button.disabled { border-style: inset; color: #808080; cursor: default; }
       #clear-link { float: right; font-size: 10px; margin-top: 8px; margin-right: 8px; }
     `;
-  const clearScript = `if(confirm('Are you sure you want to permanently delete this chat history?')){ window.location.href='/chat/clear?friend=${escapeHtml(
-    friendKey
-  )}'; } return false;`;
+
+  let clearUrl = `/chat/clear?friend=${escapeHtml(friendKey)}`;
+  if (isFrameView) clearUrl += "&view=frame";
+  const clearScript = `if(confirm('Are you sure you want to permanently delete this chat history?')){ window.location.href='${clearUrl}'; } return false;`;
+
   const body = `
       <table id="chat-table" cellpadding="0" cellspacing="0">
         <tr>
@@ -314,7 +321,7 @@ function renderChatWindowPage({
         </tr>
         <tr>
           <td id="form-td">
-            <form id="input-form" action="/chat" method="POST">
+            <form id="input-form" action="${postAction}" method="POST">
               <textarea id="prompt-input" name="prompt" rows="3" class="${
                 isDisabled ? "disabled" : ""
               }" ${isDisabled ? "disabled" : ""}>${escapeHtml(
@@ -333,6 +340,7 @@ function renderChatWindowPage({
         </tr>
       </table>
     `;
+
   let script = `
         (function() {
           function resizeLayout() {
@@ -345,16 +353,13 @@ function renderChatWindowPage({
               if (!header || !form || !chatMessagesDiv) return;
               
               var nonContentHeight = header.offsetHeight + form.offsetHeight;
-              // Buffer for table borders, padding, etc. to prevent unwanted body scrollbars
               var buffer = 18; 
               var newHeight = viewportHeight - nonContentHeight - buffer;
 
-              if (newHeight > 50) { // Sanity check for minimum height
+              if (newHeight > 50) {
                   chatMessagesDiv.style.height = newHeight + 'px';
               }
-            } catch (e) {
-                // Fail silently on old browsers
-            }
+            } catch (e) {}
           }
 
           function initChat() {
@@ -377,17 +382,14 @@ function renderChatWindowPage({
                         if (event.preventDefault) {
                           event.preventDefault();
                         } else {
-                          event.returnValue = false; // For older IE
+                          event.returnValue = false;
                         }
                         document.getElementById('input-form').submit();
-                      } else if (keyCode === 13 && (event.shiftKey || event.ctrlKey)) {
-                        // Allow manual newlines with shift+enter or ctrl+enter
                       }
                     };
                   }
               } catch(e) {}
           }
-
           initChat();
         })();
     `;
@@ -395,7 +397,10 @@ function renderChatWindowPage({
   if (statusUpdate) {
     script += `
         try {
-            if (window.opener && !window.opener.closed && typeof window.opener.updateBuddyStatus === 'function') {
+            var buddyListFrame = parent.frames['buddy_list_frame'];
+            if (buddyListFrame && !buddyListFrame.closed && typeof buddyListFrame.updateBuddyStatus === 'function') {
+                buddyListFrame.updateBuddyStatus('${statusUpdate.key}', '${statusUpdate.icon}', '${statusUpdate.className}');
+            } else if (window.opener && !window.opener.closed && typeof window.opener.updateBuddyStatus === 'function') {
                 window.opener.updateBuddyStatus('${statusUpdate.key}', '${statusUpdate.icon}', '${statusUpdate.className}');
             }
         } catch(e) {}
@@ -538,10 +543,39 @@ function renderAboutPage(worldState) {
   return renderHtmlPage({ title, styles, body });
 }
 
+function renderModernAppShell() {
+  return `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN" "http://www.w3.org/TR/html4/frameset.dtd">
+    <html>
+      <head>
+        <title>Gemini 98</title>
+        <link rel="shortcut icon" href="/favicon.ico">
+        <style>
+          /* For mobile responsiveness */
+          @media (max-width: 700px) {
+            #main-frameset {
+              rows: 250px, *;
+              cols: *;
+            }
+          }
+        </style>
+      </head>
+      <frameset cols="250,*" id="main-frameset" border="2" framespacing="2" frameborder="yes">
+        <frame src="/buddylist?view=frame" name="buddy_list_frame" scrolling="auto">
+        <frame src="/chat?friend=gemini_bot&view=frame" name="chat_frame" scrolling="no">
+      </frameset>
+      <noframes>
+        <body>
+          <p>This page requires a browser that supports frames.</p>
+        </body>
+      </noframes>
+    </html>`;
+}
+
 module.exports = {
   renderBuddyListPage,
   renderChatWindowPage,
   renderApologyPage,
   renderFilesPage,
   renderAboutPage,
+  renderModernAppShell,
 };

@@ -56,6 +56,8 @@ function renderPrimeDashboardPage(config) {
     .note-box { background-color: #FFFFE1; border: 1px solid #808080; padding: 10px; margin-bottom: 15px; line-height: 1.4; }
     .note-box b { color: #000080; }
     .note-box code { background-color: #E0E0E0; font-family: "Courier New", monospace; }
+    .safety-warning { border: 2px solid red; padding: 10px; background-color: #FFC0CB; }
+    .safety-warning p { margin: 0; font-size: 11px; color: #333; }
     `;
 
   const body = `
@@ -63,7 +65,7 @@ function renderPrimeDashboardPage(config) {
     <p class="warning">Warning: Saving these settings will reset the social world for all non-admin users. This cannot be undone.</p>
 
     <div class="note-box">
-        <b>Note on Single User Mode:</b> To bypass the login screen and automatically log in as the Prime Administrator, stop the server, add <code>SINGLE_USER_MODE=true</code> to your <code>.env</code> file, and restart the server.
+        <b>Note on Server-Operator Settings:</b> To disable the global Gemini safety filters (which also disables the "creepy age" penalty), stop the server, add <code>DISABLE_SAFETY_FILTERS=true</code> to your <code>.env</code> file, and restart the server. This setting has been moved from the UI for security.
     </div>
 
     <form action="/primeadmin/save" method="POST" onsubmit="return confirm('Saving these settings will reset the social world for all non-admin users. This cannot be undone. Are you sure you want to proceed?');">
@@ -89,6 +91,12 @@ function renderPrimeDashboardPage(config) {
                     <td class="label"><label for="featureToggles_enableHonestySystem">Enable Preference & Honesty System:</label></td>
                     <td><input type="checkbox" id="featureToggles_enableHonestySystem" name="featureToggles_enableHonestySystem" value="true" ${
                       config.featureToggles.enableHonestySystem ? "checked" : ""
+                    }></td>
+                </tr>
+                <tr>
+                    <td class="label"><label for="featureToggles_enableRRatedFilter">Enable R-Rated Content Filter:</label></td>
+                    <td><input type="checkbox" id="featureToggles_enableRRatedFilter" name="featureToggles_enableRRatedFilter" value="true" ${
+                      config.featureToggles.enableRRatedFilter ? "checked" : ""
                     }></td>
                 </tr>
             </table>

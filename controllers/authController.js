@@ -16,14 +16,22 @@ const {
 const { verifyPassword } = require("../lib/auth");
 const { getSimulationConfig } = require("../lib/config-manager");
 
+const PUBLIC_GUEST_ONLY_MODE = process.env.PUBLIC_GUEST_ONLY_MODE === "true";
 const GUEST_NAMES = ["Alex", "Jordan", "Casey", "Taylor", "Morgan", "Sky"];
 
 const getLauncherPage = (req, res) => {
   const profiles = listProfiles();
   const simulationConfig = getSimulationConfig();
   const guestModeEnabled = simulationConfig.featureToggles.enableGuestMode;
-  // Pass the error from query params if a login failed
-  res.send(renderLauncherPage(profiles, req.query.error, guestModeEnabled));
+  res.send(
+    renderLauncherPage(
+      profiles,
+      req.query.error,
+      guestModeEnabled,
+      req.isModernBrowser,
+      PUBLIC_GUEST_ONLY_MODE
+    )
+  );
 };
 
 const getSingleUserLogin = (req, res) => {
@@ -33,24 +41,22 @@ const getSingleUserLogin = (req, res) => {
     .find((p) => p.isPrimeAdmin);
 
   if (!primeAdminProfile) {
-    // If no prime admin exists, redirect to the new user page to create one.
     return res.redirect("/new-user");
   }
 
   req.session.userName = primeAdminProfile.userName;
   req.session.isAdmin = true;
 
-  // Also set the prime portal auth flag in single user mode for convenience
   req.session.isPrimePortalAuthenticated = true;
   req.session.primeAdminUserName = primeAdminProfile.userName;
 
   req.session.save((err) => {
     if (err) {
       console.error("Single User Mode session save error:", err);
-      // Fallback to regular launcher if session fails
       return res.redirect(`/?error=A server error occurred during auto-login.`);
     }
-    res.send(renderLoginSuccessPage());
+    // Single User Mode should use the modern view by default for convenience
+    res.send(renderLoginSuccessPage(true));
   });
 };
 
@@ -139,14 +145,12 @@ const postCreateUser = (req, res) => {
 };
 
 const postLogin = (req, res) => {
-  const { userName, password } = req.body;
+  const { userName, password, view_mode } = req.body;
   if (!userName || !password) {
     return res.redirect("/?error=Username and password are required.");
   }
 
   let worldState = readProfile(userName);
-  // For backward compatibility, allow login to old profiles without passwords.
-  // For new profiles, worldState.password will always exist.
   const isPasswordCorrect =
     worldState &&
     (!worldState.password || verifyPassword(worldState.password, password));
@@ -155,13 +159,11 @@ const postLogin = (req, res) => {
     return res.redirect("/?error=Invalid username or password.");
   }
 
-  // Check for developer options cookie (applied during login)
   if (req.cookies.icq98_options) {
     try {
       const options = JSON.parse(req.cookies.icq98_options);
       let profileModified = false;
 
-      // Handle Application Reset (replaces Profile Reset)
       if (options.resetApplication) {
         console.log(
           `[OPTIONS] Full application reset triggered by ${userName}. Deleting all data.`
@@ -175,7 +177,6 @@ const postLogin = (req, res) => {
           "generated-images"
         );
 
-        // Function to clear directory contents
         const clearDir = (dir) => {
           if (fs.existsSync(dir)) {
             fs.readdirSync(dir).forEach((file) => {
@@ -193,11 +194,9 @@ const postLogin = (req, res) => {
           `[OPTIONS] All profiles and images deleted. Redirecting to setup.`
         );
         res.clearCookie("icq98_options");
-        // We must destroy the session and redirect to the root page, terminating execution here.
         return req.session.destroy(() => res.redirect("/"));
       }
 
-      // Handle Relationship Score Overwrite
       if (options.relationshipLevel && options.relationshipLevel !== -1) {
         console.log(
           `[OPTIONS] Setting all relationships to ${options.relationshipLevel} for ${userName}`
@@ -205,12 +204,10 @@ const postLogin = (req, res) => {
         Object.keys(worldState.userScores).forEach((key) => {
           worldState.userScores[key] = options.relationshipLevel;
         });
-        // Elion is always special
         worldState.userScores["elion_mystic"] = 0;
         profileModified = true;
       }
 
-      // Set session flag for showing scores
       if (options.showScores) {
         console.log(
           `[OPTIONS] Enabling score display for ${userName}'s session.`
@@ -229,7 +226,6 @@ const postLogin = (req, res) => {
     res.clearCookie("icq98_options");
   }
 
-  // Set session data and last login timestamp
   req.session.userName = worldState.userName;
   req.session.isAdmin = worldState.isAdmin || false;
   worldState.lastLogin = new Date().toISOString();
@@ -240,7 +236,8 @@ const postLogin = (req, res) => {
       console.error("Session save error:", err);
       return res.redirect(`/?error=A server error occurred during login.`);
     }
-    res.send(renderLoginSuccessPage());
+    const useModernView = view_mode === "modern";
+    res.send(renderLoginSuccessPage(useModernView));
   });
 };
 
@@ -250,14 +247,13 @@ const getGuestLogin = (req, res) => {
     return res.redirect("/?error=Guest mode is currently disabled.");
   }
 
-  // 1. Generate a unique guest profile
-  const guestId = uuidv4().split("-")[0]; // short uuid
+  const guestId = uuidv4().split("-")[0];
   const guestUserName = `Guest-${guestId}`;
   const randomName =
     GUEST_NAMES[Math.floor(Math.random() * GUEST_NAMES.length)];
-  const randomAge = 14 + Math.floor(Math.random() * 6); // 14-19
+  const randomAge = 14 + Math.floor(Math.random() * 6);
   const randomSex = Math.random() < 0.5 ? "M" : "F";
-  const guestPassword = uuidv4(); // Temporary password, not meant to be used
+  const guestPassword = uuidv4();
 
   const worldState = generateInitialWorldState(
     {
@@ -274,11 +270,9 @@ const getGuestLogin = (req, res) => {
     simulationConfig
   );
 
-  // Set lastLogin immediately so cleanup logic can work
   worldState.lastLogin = new Date().toISOString();
   writeProfile(guestUserName, worldState);
 
-  // 2. Increment guest counter
   const counterPath = path.join(
     __dirname,
     "..",
@@ -296,10 +290,9 @@ const getGuestLogin = (req, res) => {
   guestData.count = (guestData.count || 0) + 1;
   fs.writeFileSync(counterPath, JSON.stringify(guestData));
 
-  // 3. Set session and respond
   req.session.userName = worldState.userName;
   req.session.isAdmin = worldState.isAdmin;
-  req.session.isGuest = true; // Maybe useful later
+  req.session.isGuest = true;
 
   req.session.save((err) => {
     if (err) {
@@ -308,7 +301,10 @@ const getGuestLogin = (req, res) => {
         `/?error=A server error occurred during guest login.`
       );
     }
-    res.send(renderLoginSuccessPage());
+    // Guests on modern browsers should also get the modern view
+    const userAgent = req.get("User-Agent") || "";
+    const useModernView = !userAgent.includes("MSIE");
+    res.send(renderLoginSuccessPage(useModernView));
   });
 };
 
