@@ -14,6 +14,7 @@ const {
 const {
   renderPrimeLoginPage,
   renderPrimeDashboardPage,
+  renderPrimeDashboardFallbackPage,
 } = require("../views/primeAdminRenderer");
 
 const CONFIG_PATH = path.resolve(
@@ -78,7 +79,11 @@ const postLogin = (req, res) => {
 
 const getDashboardPage = (req, res) => {
   const simulationConfig = getSimulationConfig();
-  res.send(renderPrimeDashboardPage(simulationConfig));
+  if (req.isModernBrowser) {
+    res.send(renderPrimeDashboardPage(simulationConfig));
+  } else {
+    res.send(renderPrimeDashboardFallbackPage(simulationConfig));
+  }
 };
 
 const postSaveChanges = (req, res) => {

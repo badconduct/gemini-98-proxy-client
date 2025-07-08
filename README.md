@@ -82,7 +82,6 @@ The first user created becomes the **Prime Administrator** with access to powerf
 
 3.  **Create your `.env` configuration file**
     Create a `.env` file in the project root. You can use the example below as a template—just fill in your own API key and session secret.
-
     **Example `.env` file:**
 
     ```env
@@ -90,8 +89,20 @@ The first user created becomes the **Prime Administrator** with access to powerf
     # Your Gemini API key from Google AI Studio.
     API_KEY=your-gemini-api-key-goes-here
 
-    # A long, random string for session security. Generate one easily online.
+    # A long, random string used to sign session cookies for security.
+    # This prevents users from tampering with their session data.
+    # Generate one easily online or with a password manager.
     SESSION_SECRET=a-very-long-and-random-string-for-better-security
+
+    # --- Network Settings (Optional, but recommended for deployment) ---
+    # The IP address the server will listen on.
+    # 'localhost' (default) is for local access only.
+    # '0.0.0.0' is required for Docker or most public hosting platforms.
+    HOST=localhost
+
+    # The port the server will run on.
+    # Default is 3000. Many hosting services will set this automatically.
+    PORT=3000
 
     # --- Convenience Settings (Optional) ---
     # Set this to your local UTC offset to ensure AI schedules are correct.
@@ -99,14 +110,14 @@ The first user created becomes the **Prime Administrator** with access to powerf
     TIMEZONE_OFFSET=-5
 
     # Bypasses the login screen and automatically logs in as the Prime Admin.
+    # If no Prime Admin exists, it will direct you to create one first.
     # Useful for private, personal use where you are the only user.
     SINGLE_USER_MODE=false
 
     # --- Server Operator Settings (Optional) ---
-    # WARNING: Use at your own risk. Disabling the safety filter will allow the AI to generate
-    # responses that may be inappropriate or offensive. This also disables the "creepy age" penalty.
-    # This setting is for creative exploration and should be used responsibly. Inappropriate use may
-    # lead to suspension of your API key.
+    # WARNING: Use at your own risk. Disabling this allows the AI to generate
+    # potentially inappropriate or offensive content and also disables the "creepy age" penalty.
+    # This setting is for creative exploration. Misuse may violate Gemini's terms of service.
     DISABLE_SAFETY_FILTERS=false
 
     # --- Public Hosting / Demo Mode Settings (Optional) ---

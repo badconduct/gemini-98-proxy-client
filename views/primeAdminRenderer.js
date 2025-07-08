@@ -297,7 +297,361 @@ function renderPrimeDashboardPage(config) {
   return renderHtmlPage({ title, styles, body });
 }
 
+function renderPrimeDashboardFallbackPage(config) {
+  const title = "Prime Admin - Simulation Control";
+  const styles = `
+    body { font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 12px; background-color: #C0C0C0; margin: 0; padding: 10px; }
+    h1 { font-size: 16px; margin-top: 0; }
+    form { margin: 0; }
+    input[type="text"], input[type="number"] { width: 80px; }
+    .warning { font-style: italic; color: #555; font-size: 11px; }
+    .note-box { background-color: #FFFFE1; border: 1px solid #808080; padding: 10px; margin-bottom: 15px; line-height: 1.4; }
+    .note-box b { color: #000080; }
+    .note-box code { background-color: #E0E0E0; font-family: "Courier New", monospace; }
+    .button-bar { text-align: right; padding: 10px; border-top: 2px solid #fff; background: #C0C0C0; margin-top: 10px; }
+    .button-bar input, .button-bar a { margin-left: 10px; width: 220px; font-size: 12px; padding: 4px; border-top: 1px solid #fff; border-left: 1px solid #fff; border-right: 1px solid #000; border-bottom: 1px solid #000; background-color: #C0C0C0; text-decoration: none; color: #000; text-align: center; }
+    `;
+
+  const renderSection = (legend, content) => `
+        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr><td>
+                <table width="100%" border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; border-color: #808080;">
+                    <tr><td colspan="2" style="background-color: #E0E0E0; font-weight: bold; color: #000080;">${legend}</td></tr>
+                    ${content}
+                </table>
+            </td></tr>
+        </table>
+    `;
+
+  const renderRow = (
+    label,
+    inputId,
+    inputName,
+    value,
+    type = "number",
+    extras = ""
+  ) => `
+        <tr>
+            <td width="55%" align="right"><b><label for="${inputId}">${label}:</label></b></td>
+            <td><input type="${type}" id="${inputId}" name="${inputName}" value="${value}" ${extras}></td>
+        </tr>
+    `;
+
+  const renderCheckbox = (label, inputId, inputName, isChecked) => `
+        <input type="checkbox" id="${inputId}" name="${inputName}" value="true" ${
+    isChecked ? "checked" : ""
+  }><label for="${inputId}">${label}</label>
+    `;
+
+  const body = `
+        <h1>Prime Administration Portal</h1>
+        <p class="warning">Warning: Saving these settings will reset the social world for all non-admin users. This cannot be undone.</p>
+        <div class="note-box">
+            <b>Note on Server-Operator Settings:</b> To disable the global Gemini safety filters (which also disables the "creepy age" penalty), stop the server, add <code>DISABLE_SAFETY_FILTERS=true</code> to your <code>.env</code> file, and restart the server. This setting has been moved from the UI for security.
+        </div>
+        <form action="/primeadmin/save" method="POST" onsubmit="return confirm('Saving these settings will reset the social world for all non-admin users. This cannot be undone. Are you sure you want to proceed?');">
+            ${renderSection(
+              "Global System Toggles",
+              `
+                ${renderRow(
+                  renderCheckbox(
+                    "Enable Guest Mode",
+                    "featureToggles_enableGuestMode",
+                    "featureToggles_enableGuestMode",
+                    config.featureToggles.enableGuestMode
+                  ),
+                  "",
+                  "",
+                  "",
+                  "fragment"
+                )}
+                ${renderRow(
+                  renderCheckbox(
+                    "Enable Chat History Condensation",
+                    "featureToggles_enableHistoryCondensation",
+                    "featureToggles_enableHistoryCondensation",
+                    config.featureToggles.enableHistoryCondensation
+                  ),
+                  "",
+                  "",
+                  "",
+                  "fragment"
+                )}
+                ${renderRow(
+                  renderCheckbox(
+                    "Enable Preference & Honesty System",
+                    "featureToggles_enableHonestySystem",
+                    "featureToggles_enableHonestySystem",
+                    config.featureToggles.enableHonestySystem
+                  ),
+                  "",
+                  "",
+                  "",
+                  "fragment"
+                )}
+                ${renderRow(
+                  renderCheckbox(
+                    "Enable R-Rated Content Filter",
+                    "featureToggles_enableRRatedFilter",
+                    "featureToggles_enableRRatedFilter",
+                    config.featureToggles.enableRRatedFilter
+                  ),
+                  "",
+                  "",
+                  "",
+                  "fragment"
+                )}
+            `.replace(
+                /<tr><td.*?>(.*?)<\/td><\/tr>/g,
+                '<tr><td colspan="2">$1</td></tr>'
+              )
+            )}
+
+            ${renderSection(
+              "Initial Relationship Scores",
+              `
+                ${renderRow(
+                  "Score for same social group (e.g., student-student)",
+                  "initialScores_sameGroup",
+                  "initialScores_sameGroup",
+                  config.initialScores.sameGroup,
+                  "number",
+                  'min="0" max="100"'
+                )}
+                ${renderRow(
+                  "Score for different social groups",
+                  "initialScores_differentGroup",
+                  "initialScores_differentGroup",
+                  config.initialScores.differentGroup,
+                  "number",
+                  'min="0" max="100"'
+                )}
+                ${renderRow(
+                  "Score for Elion (The Watcher)",
+                  "initialScores_elion",
+                  "initialScores_elion",
+                  config.initialScores.elion,
+                  "number",
+                  'min="0" max="100"'
+                )}
+            `
+            )}
+
+            ${renderSection(
+              "Relationship Score Modifiers",
+              `
+                ${renderRow(
+                  "Insulting Interests Penalty",
+                  "scoreModifiers_insultInterests",
+                  "scoreModifiers_insultInterests",
+                  config.scoreModifiers.insultInterests,
+                  "number",
+                  'min="-10" max="0"'
+                )}
+                ${renderRow(
+                  "Complimenting Interests Bonus",
+                  "scoreModifiers_complimentInterests",
+                  "scoreModifiers_complimentInterests",
+                  config.scoreModifiers.complimentInterests,
+                  "number",
+                  'min="0" max="10"'
+                )}
+                ${renderRow(
+                  "Flirting (Low Score) Penalty",
+                  "scoreModifiers_flirtFail",
+                  "scoreModifiers_flirtFail",
+                  config.scoreModifiers.flirtFail,
+                  "number",
+                  'min="-10" max="0"'
+                )}
+                ${renderRow(
+                  "Flirting (High Score) Bonus",
+                  "scoreModifiers_flirtSuccess",
+                  "scoreModifiers_flirtSuccess",
+                  config.scoreModifiers.flirtSuccess,
+                  "number",
+                  'min="0" max="10"'
+                )}
+                ${renderRow(
+                  'Social Lie Penalty (e.g. "we\'re friends")',
+                  "scoreModifiers_liePenalty",
+                  "scoreModifiers_liePenalty",
+                  config.scoreModifiers.liePenalty,
+                  "number",
+                  'min="-10" max="0"'
+                )}
+                ${renderRow(
+                  "Honesty Contradiction Penalty",
+                  "scoreModifiers_honestyPenalty",
+                  "scoreModifiers_honestyPenalty",
+                  config.scoreModifiers.honestyPenalty,
+                  "number",
+                  'min="-10" max="0"'
+                )}
+            `
+            )}
+
+            ${renderSection(
+              "Initial Dating & Crush Rules",
+              `
+                ${renderRow(
+                  "Minimum initial dating pairs",
+                  "datingRules_minPairs",
+                  "datingRules_minPairs",
+                  config.datingRules.minPairs,
+                  "number",
+                  'min="0" max="6"'
+                )}
+                ${renderRow(
+                  "Maximum initial dating pairs",
+                  "datingRules_maxPairs",
+                  "datingRules_maxPairs",
+                  config.datingRules.maxPairs,
+                  "number",
+                  'min="0" max="6"'
+                )}
+                ${renderRow(
+                  "Maximum crushes per character",
+                  "datingRules_maxCrushes",
+                  "datingRules_maxCrushes",
+                  config.datingRules.maxCrushes,
+                  "number",
+                  'min="0" max="5"'
+                )}
+                ${renderRow(
+                  "Relationship score after cheating is detected",
+                  "datingRules_cheatingPenaltyScore",
+                  "datingRules_cheatingPenaltyScore",
+                  config.datingRules.cheatingPenaltyScore,
+                  "number",
+                  'min="0" max="50"'
+                )}
+                ${renderRow(
+                  "Score bonus for ex-partner after breakup",
+                  "datingRules_breakupForgivenessBonus",
+                  "datingRules_breakupForgivenessBonus",
+                  config.datingRules.breakupForgivenessBonus,
+                  "number",
+                  'min="0" max="50"'
+                )}
+                <tr>
+                    <td width="55%" align="right"><b>Dating Lockouts:</b></td>
+                    <td>
+                        ${renderCheckbox(
+                          "Townies cannot date Students",
+                          "datingLockouts_towniesAndStudents",
+                          "datingLockouts_towniesAndStudents",
+                          config.datingLockouts.towniesAndStudents
+                        )}<br>
+                        ${renderCheckbox(
+                          "Jocks cannot date Goths",
+                          "datingLockouts_jocksAndGoths",
+                          "datingLockouts_jocksAndGoths",
+                          config.datingLockouts.jocksAndGoths
+                        )}<br>
+                        ${renderCheckbox(
+                          "Preps cannot date Slackers",
+                          "datingLockouts_prepsAndSlackers",
+                          "datingLockouts_prepsAndSlackers",
+                          config.datingLockouts.prepsAndSlackers
+                        )}
+                    </td>
+                </tr>
+            `
+            )}
+
+            ${renderSection(
+              "Global Social Rules",
+              `
+                ${renderRow(
+                  "Hostile relationship threshold (score at or below)",
+                  "socialRules_hostileThreshold",
+                  "socialRules_hostileThreshold",
+                  config.socialRules.hostileThreshold,
+                  "number",
+                  'min="0" max="20"'
+                )}
+                ${renderRow(
+                  "Best Friend threshold (score at or above)",
+                  "socialRules_bffThreshold",
+                  "socialRules_bffThreshold",
+                  config.socialRules.bffThreshold,
+                  "number",
+                  'min="90" max="100"'
+                )}
+                ${renderRow(
+                  '"Creepy" age threshold (users this age or older are creepy to students)',
+                  "socialRules_creepyAgeThreshold",
+                  "socialRules_creepyAgeThreshold",
+                  config.socialRules.creepyAgeThreshold,
+                  "number",
+                  'min="20" max="99"'
+                )}
+                ${renderRow(
+                  '"Creepy" age relationship penalty per message',
+                  "socialRules_creepyAgePenalty",
+                  "socialRules_creepyAgePenalty",
+                  config.socialRules.creepyAgePenalty,
+                  "number",
+                  'min="-10" max="0"'
+                )}
+                ${renderRow(
+                  "Patronizing age threshold (users this age or younger are treated like kids)",
+                  "socialRules_patronizingAgeThreshold",
+                  "socialRules_patronizingAgeThreshold",
+                  config.socialRules.patronizingAgeThreshold,
+                  "number",
+                  'min="1" max="19"'
+                )}
+                ${renderRow(
+                  "Gossip spread chance (0.0 to 1.0)",
+                  "socialRules_gossipChance",
+                  "socialRules_gossipChance",
+                  config.socialRules.gossipChance,
+                  "text"
+                )}
+                ${renderRow(
+                  "Gossip spread scope (max number of friends told)",
+                  "socialRules_gossipScope",
+                  "socialRules_gossipScope",
+                  config.socialRules.gossipScope,
+                  "number",
+                  'min="1" max="10"'
+                )}
+            `
+            )}
+
+            ${renderSection(
+              "System Internals",
+              `
+                ${renderRow(
+                  "Chat history condensation threshold (messages)",
+                  "systemSettings_historyCondensationThreshold",
+                  "systemSettings_historyCondensationThreshold",
+                  config.systemSettings.historyCondensationThreshold,
+                  "number",
+                  'min="10" max="100"'
+                )}
+            `
+            )}
+
+            <div class="button-bar">
+                 <input type="submit" value="Save & Restart Simulation">
+            </div>
+        </form>
+        <div class="button-bar" style="border-top: 1px dotted #808080; margin-top: 0;">
+            <form action="/primeadmin/reset" method="POST" onsubmit="return confirm('This will reset all settings to their defaults AND restart the simulation for all non-admin users. Are you absolutely sure?');" style="display:inline;">
+                 <input type="submit" value="Default Settings & Reset Simulation">
+            </form>
+            <a href="/">Cancel and Return to Login</a>
+        </div>
+    `;
+
+  return renderHtmlPage({ title, styles, body });
+}
+
 module.exports = {
   renderPrimeLoginPage,
   renderPrimeDashboardPage,
+  renderPrimeDashboardFallbackPage,
 };
