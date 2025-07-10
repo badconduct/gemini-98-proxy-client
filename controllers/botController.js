@@ -98,7 +98,7 @@ async function postBotMessage(req, res) {
       );
 
       const responseStream = await ai.models.generateContentStream({
-        model: "gemini-2.5-flash-preview-04-17",
+        model: "gemini-2.5-flash",
         contents,
         config,
       });
@@ -116,7 +116,7 @@ async function postBotMessage(req, res) {
       // Use non-streaming for concise bots (Gemini Bot)
       console.log(`[AI] Using non-streaming for ${persona.name}.`);
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-04-17",
+        model: "gemini-2.5-flash",
         contents,
         config,
       });

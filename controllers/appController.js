@@ -105,7 +105,7 @@ Provide your summary now.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-04-17",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: summarizationPrompt }] }],
     });
     return response.text.trim();
@@ -133,7 +133,7 @@ Examples:
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-04-17",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: analysisPrompt }] }],
       config: { responseMimeType: "application/json" },
     });
@@ -442,7 +442,7 @@ const postChatMessage = async (req, res) => {
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-04-17",
+      model: "gemini-2.5-flash",
       contents,
       config,
     });
@@ -688,11 +688,13 @@ const postChatMessage = async (req, res) => {
       console.log(
         `[HISTORY] Condensation triggered for ${persona.name}. Message count: ${messageCount}`
       );
+      // Summarize the full history before truncating it.
       const summary = await summarizeHistory(history, userName, persona.name);
       worldState.chatSummaries[friendKey] = summary;
 
+      // Truncate the history to only the last few messages, making the summary process transparent to the user.
       const lastFewMessages = messages.slice(-4).join("\n\n");
-      history = `System: (${getTimestamp()}) The previous conversation has been summarized to preserve long-term memory.\n\nSummary:\n${summary}\n\nSystem: (${getTimestamp()}) --- Resuming conversation ---\n\n${lastFewMessages}`;
+      history = lastFewMessages;
 
       console.log(
         `[CACHE] Invalidating cache for ${persona.name} due to history condensation.`
@@ -780,7 +782,7 @@ const postApology = async (req, res) => {
       apologyText.trim()
     );
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-04-17",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: "This is my apology." }] }],
       config: { systemInstruction, responseMimeType: "application/json" },
     });
