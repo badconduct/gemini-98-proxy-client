@@ -104,13 +104,13 @@ function renderBuddyListPage(
   let adminLinks = "";
   if (isAdmin) {
     adminLinks = `
-            <a href="/admin/users" onclick="window.open('/admin/users', 'users_window', 'width=700,height=400,resizable=yes,scrollbars=yes'); return false;">Users</a>
+            <a href="/admin/users" onclick="window.open('/admin/users', 'width=700,height=400,resizable=yes,scrollbars=yes'); return false;">Users</a>
             <a href="/admin/options" onclick="window.open('/admin/options', 'options_window', 'width=450,height=500,resizable=yes,scrollbars=yes'); return false;">Options</a>
         `;
   }
 
   const styles = `
-      html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+      html, body { height: 100%; margin: 0; padding: 0; }
       body { background-color: #C0C0C0; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 12px; }
       .container-table { width: 100%; height: 100%; border-collapse: collapse; border: 3px solid #C0C0C0; border-top-color: #FFFFFF; border-left-color: #FFFFFF; border-right-color: #000000; border-bottom-color: #000000; }
       h1 { background: #000080; color: #FFFFFF; font-size: 14px; font-weight: bold; padding: 4px 8px; margin: 0; }
@@ -171,9 +171,18 @@ function renderBuddyListPage(
     `;
 
   if (isFrameView) {
+    const frameBodyStyles = `
+            html, body { height: 100%; margin: 0; padding: 0; }
+            body { 
+                background-color: #C0C0C0; 
+                font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; 
+                font-size: 12px;
+                /* Allow the frame's native scrollbars to work */
+            }
+        `;
     return renderHtmlPage({
       title: `${escapeHtml(userName)}'s Buddy List`,
-      styles,
+      styles: styles.replace(/body {[^}]+}/, frameBodyStyles), // Replace the main body style
       body,
       scripts,
       metaRefreshTag: "", // No refresh for framed view
@@ -272,6 +281,11 @@ function renderChatWindowPage({
     promptText = "The user is currently offline.";
   }
 
+  // Escape the prompt text for use inside a JavaScript string literal
+  const escapedPromptTextJs = promptText
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"');
+
   const headerText = friendPersona
     ? `${escapeHtml(persona.name)}${
         relationshipScoreText ? ` (${relationshipScoreText})` : ""
@@ -321,7 +335,24 @@ function renderChatWindowPage({
         </tr>
         <tr>
           <td id="form-td">
-            <form id="input-form" action="${postAction}" method="POST">
+            <form id="input-form" action="${postAction}" method="POST" onsubmit="
+              try {
+                var input = document.getElementById('prompt-input');
+                // Use a regex for .trim() to support ancient browsers like IE6.
+                var trimmedValue = input.value.replace(/^\\s+|\\s+$/g, '');
+                if (!input || !input.value || !trimmedValue || trimmedValue === '${escapedPromptTextJs}') { return false; }
+
+                var chatMessages = document.getElementById('chat-messages');
+                var systemMessageDiv = document.createElement('div');
+                systemMessageDiv.className = 'message message-system';
+                systemMessageDiv.innerHTML = '--- Message sent. Waiting for reply... ---';
+                chatMessages.appendChild(systemMessageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                input.disabled = true;
+                document.getElementById('send-button').disabled = true;
+                return true;
+              } catch(e) { return true; }
+            ">
               <textarea id="prompt-input" name="prompt" rows="3" class="${
                 isDisabled ? "disabled" : ""
               }" ${isDisabled ? "disabled" : ""}>${escapeHtml(
