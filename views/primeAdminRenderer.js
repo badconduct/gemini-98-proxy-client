@@ -99,6 +99,12 @@ function renderPrimeDashboardPage(config) {
                       config.featureToggles.enableRRatedFilter ? "checked" : ""
                     }></td>
                 </tr>
+                <tr>
+                    <td class="label"><label for="featureToggles_forceRetroView">Force Retro (Pop-up) View for All Users:</label></td>
+                    <td><input type="checkbox" id="featureToggles_forceRetroView" name="featureToggles_forceRetroView" value="true" ${
+                      config.featureToggles.forceRetroView ? "checked" : ""
+                    }></td>
+                </tr>
             </table>
         </fieldset>
 
@@ -337,11 +343,23 @@ function renderPrimeDashboardFallbackPage(config) {
         </tr>
     `;
 
+  // Renders a checkbox and its label.
   const renderCheckbox = (label, inputId, inputName, isChecked) => `
         <input type="checkbox" id="${inputId}" name="${inputName}" value="true" ${
     isChecked ? "checked" : ""
   }><label for="${inputId}">${label}</label>
     `;
+
+  // Renders a single table row with one cell spanning both columns, perfect for checkbox toggles.
+  const renderCheckboxRowHtml = (labelText, inputId, inputName, isChecked) => {
+    const checkboxHtml = renderCheckbox(
+      labelText,
+      inputId,
+      inputName,
+      isChecked
+    );
+    return `<tr><td colspan="2" align="left" style="padding-left: 10px;">${checkboxHtml}</td></tr>`;
+  };
 
   const body = `
         <h1>Prime Administration Portal</h1>
@@ -353,58 +371,37 @@ function renderPrimeDashboardFallbackPage(config) {
             ${renderSection(
               "Global System Toggles",
               `
-                ${renderRow(
-                  renderCheckbox(
-                    "Enable Guest Mode",
-                    "featureToggles_enableGuestMode",
-                    "featureToggles_enableGuestMode",
-                    config.featureToggles.enableGuestMode
-                  ),
-                  "",
-                  "",
-                  "",
-                  "fragment"
+                ${renderCheckboxRowHtml(
+                  "Enable Guest Mode",
+                  "featureToggles_enableGuestMode",
+                  "featureToggles_enableGuestMode",
+                  config.featureToggles.enableGuestMode
                 )}
-                ${renderRow(
-                  renderCheckbox(
-                    "Enable Chat History Condensation",
-                    "featureToggles_enableHistoryCondensation",
-                    "featureToggles_enableHistoryCondensation",
-                    config.featureToggles.enableHistoryCondensation
-                  ),
-                  "",
-                  "",
-                  "",
-                  "fragment"
+                ${renderCheckboxRowHtml(
+                  "Enable Chat History Condensation",
+                  "featureToggles_enableHistoryCondensation",
+                  "featureToggles_enableHistoryCondensation",
+                  config.featureToggles.enableHistoryCondensation
                 )}
-                ${renderRow(
-                  renderCheckbox(
-                    "Enable Preference & Honesty System",
-                    "featureToggles_enableHonestySystem",
-                    "featureToggles_enableHonestySystem",
-                    config.featureToggles.enableHonestySystem
-                  ),
-                  "",
-                  "",
-                  "",
-                  "fragment"
+                ${renderCheckboxRowHtml(
+                  "Enable Preference & Honesty System",
+                  "featureToggles_enableHonestySystem",
+                  "featureToggles_enableHonestySystem",
+                  config.featureToggles.enableHonestySystem
                 )}
-                ${renderRow(
-                  renderCheckbox(
-                    "Enable R-Rated Content Filter",
-                    "featureToggles_enableRRatedFilter",
-                    "featureToggles_enableRRatedFilter",
-                    config.featureToggles.enableRRatedFilter
-                  ),
-                  "",
-                  "",
-                  "",
-                  "fragment"
+                ${renderCheckboxRowHtml(
+                  "Enable R-Rated Content Filter",
+                  "featureToggles_enableRRatedFilter",
+                  "featureToggles_enableRRatedFilter",
+                  config.featureToggles.enableRRatedFilter
                 )}
-            `.replace(
-                /<tr><td.*?>(.*?)<\/td><\/tr>/g,
-                '<tr><td colspan="2">$1</td></tr>'
-              )
+                ${renderCheckboxRowHtml(
+                  "Force Retro (Pop-up) View for All Users",
+                  "featureToggles_forceRetroView",
+                  "featureToggles_forceRetroView",
+                  config.featureToggles.forceRetroView
+                )}
+            `
             )}
 
             ${renderSection(

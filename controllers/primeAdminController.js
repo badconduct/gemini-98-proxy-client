@@ -118,6 +118,7 @@ const postSaveChanges = (req, res) => {
       !!req.body.featureToggles_enableHistoryCondensation,
     enableHonestySystem: !!req.body.featureToggles_enableHonestySystem,
     enableRRatedFilter: !!req.body.featureToggles_enableRRatedFilter,
+    forceRetroView: !!req.body.featureToggles_forceRetroView,
   };
 
   const datingLockouts = {

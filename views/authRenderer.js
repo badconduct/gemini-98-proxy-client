@@ -7,19 +7,21 @@ function renderLauncherPage(
   error = null,
   guestModeEnabled = true,
   isModernBrowser = false,
-  isGuestOnlyMode = false
+  isGuestOnlyMode = false,
+  isForceRetroView = false
 ) {
   const title = "Gemini 98 - Launcher";
   const header = "ICQ98 Network Login";
 
-  const modernFriendlyOption = isModernBrowser
-    ? `
+  const modernFriendlyOption =
+    isModernBrowser && !isForceRetroView
+      ? `
     <div style="text-align: center; margin-bottom: 15px; font-size: 11px;">
         <input type="checkbox" id="modern-view-checkbox" name="view_mode" value="modern" checked>
         <label for="modern-view-checkbox">Use Modern Friendly View (no pop-ups)</label>
     </div>
   `
-    : "";
+      : "";
 
   let formContent = `
         <div style="text-align: center; margin-bottom: 20px;">

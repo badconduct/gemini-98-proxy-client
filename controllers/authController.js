@@ -29,7 +29,8 @@ const getLauncherPage = (req, res) => {
       req.query.error,
       guestModeEnabled,
       req.isModernBrowser,
-      PUBLIC_GUEST_ONLY_MODE
+      PUBLIC_GUEST_ONLY_MODE,
+      simulationConfig.featureToggles.forceRetroView
     )
   );
 };
@@ -55,8 +56,9 @@ const getSingleUserLogin = (req, res) => {
       console.error("Single User Mode session save error:", err);
       return res.redirect(`/?error=A server error occurred during auto-login.`);
     }
-    // Single User Mode should use the modern view by default for convenience
-    res.send(renderLoginSuccessPage(true));
+    const simulationConfig = getSimulationConfig();
+    const useModernView = !simulationConfig.featureToggles.forceRetroView;
+    res.send(renderLoginSuccessPage(useModernView));
   });
 };
 
@@ -159,6 +161,8 @@ const postLogin = (req, res) => {
     return res.redirect("/?error=Invalid username or password.");
   }
 
+  const simulationConfig = getSimulationConfig();
+
   if (req.cookies.icq98_options) {
     try {
       const options = JSON.parse(req.cookies.icq98_options);
@@ -236,7 +240,8 @@ const postLogin = (req, res) => {
       console.error("Session save error:", err);
       return res.redirect(`/?error=A server error occurred during login.`);
     }
-    const useModernView = view_mode === "modern";
+    const useModernView =
+      view_mode === "modern" && !simulationConfig.featureToggles.forceRetroView;
     res.send(renderLoginSuccessPage(useModernView));
   });
 };
@@ -301,9 +306,10 @@ const getGuestLogin = (req, res) => {
         `/?error=A server error occurred during guest login.`
       );
     }
-    // Guests on modern browsers should also get the modern view
     const userAgent = req.get("User-Agent") || "";
-    const useModernView = !userAgent.includes("MSIE");
+    const useModernView =
+      !userAgent.includes("MSIE") &&
+      !simulationConfig.featureToggles.forceRetroView;
     res.send(renderLoginSuccessPage(useModernView));
   });
 };
