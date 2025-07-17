@@ -37,8 +37,7 @@
     "enableGuestMode": true,
     "enableHistoryCondensation": true,
     "enableHonestySystem": true,
-    "enableRRatedFilter": true,
-    "forceRetroView": false
+    "enableRRatedFilter": true
   },
   "systemSettings": {
     "historyCondensationThreshold": 30

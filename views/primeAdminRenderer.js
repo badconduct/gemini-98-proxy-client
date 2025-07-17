@@ -99,12 +99,6 @@ function renderPrimeDashboardPage(config) {
                       config.featureToggles.enableRRatedFilter ? "checked" : ""
                     }></td>
                 </tr>
-                <tr>
-                    <td class="label"><label for="featureToggles_forceRetroView">Force Retro (Pop-up) View for All Users:</label></td>
-                    <td><input type="checkbox" id="featureToggles_forceRetroView" name="featureToggles_forceRetroView" value="true" ${
-                      config.featureToggles.forceRetroView ? "checked" : ""
-                    }></td>
-                </tr>
             </table>
         </fieldset>
 
@@ -394,12 +388,6 @@ function renderPrimeDashboardFallbackPage(config) {
                   "featureToggles_enableRRatedFilter",
                   "featureToggles_enableRRatedFilter",
                   config.featureToggles.enableRRatedFilter
-                )}
-                ${renderCheckboxRowHtml(
-                  "Force Retro (Pop-up) View for All Users",
-                  "featureToggles_forceRetroView",
-                  "featureToggles_forceRetroView",
-                  config.featureToggles.forceRetroView
                 )}
             `
             )}
