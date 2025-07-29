@@ -12,7 +12,7 @@ const {
   renderModernAppShell,
 } = require("../views/appRenderer");
 const { getTimestamp, clamp, shuffleArray } = require("../lib/utils");
-const { writeProfile } = require("../lib/state-manager");
+const { writeProfile, readProfile } = require("../lib/state-manager");
 const aiLogic = require("../lib/ai-logic");
 const { getRelationshipTier } = require("../lib/ai-logic");
 const { getSimulationConfig } = require("../lib/config-manager");
@@ -27,8 +27,131 @@ const ai = new GoogleGenAI({ apiKey });
 // --- Timezone Configuration ---
 const TIMEZONE_OFFSET = parseInt(process.env.TIMEZONE_OFFSET, 10) || 0;
 
-// --- Background Job Functions ---
+// --- Asynchronous Chat Logic ---
 
+/**
+ * Handles the entire lifecycle of getting a friend's response in the background.
+ * It calls the AI once to get the reply and delay, then populates the job object.
+ * @param {string} userName - The user's name.
+ * @param {string} friendKey - The friend's key.
+ * @param {string|null} timeContextString - Context about time passed since last chat.
+ */
+async function processFriendChatInBackground(
+  userName,
+  friendKey,
+  timeContextString
+) {
+  const jobKey = `${userName}_${friendKey}`;
+  const job = global.chatJobs[jobKey];
+
+  if (!job) {
+    console.error(
+      `[Chat Worker] Job ${jobKey} not found. It may have been cancelled or timed out.`
+    );
+    return;
+  }
+
+  const persona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
+  let worldState = readProfile(userName);
+  const simulationConfig = getSimulationConfig();
+
+  try {
+    const now = new Date();
+    const isSummer = now.getUTCMonth() >= 6 && now.getUTCMonth() <= 7;
+
+    // 1. Content Filter Check
+    const fullPrompt = job.messages.join(" ");
+    if (simulationConfig.featureToggles.enableRRatedFilter) {
+      const filterResult = await checkRRatedContent(
+        fullPrompt,
+        persona,
+        worldState,
+        simulationConfig
+      );
+      if (filterResult.violation) {
+        let history = worldState.chatHistories[friendKey] || "";
+        history += `\n\n${persona.name}: (${getTimestamp()}) ${
+          filterResult.reply
+        }`;
+        filterResult.worldState.chatHistories[friendKey] = history;
+        // Update timestamp even on a filtered reply to prevent repeated time-based greetings
+        filterResult.worldState.lastInteractionTimestamps[friendKey] =
+          new Date().toISOString();
+        writeProfile(userName, filterResult.worldState);
+        delete global.chatJobs[jobKey];
+        return;
+      }
+    }
+
+    // 2. Generate AI Response and Delay
+    const contents = aiLogic.buildHistoryForApi(
+      worldState.chatHistories[friendKey] || "",
+      userName
+    );
+    const { systemInstruction, safetySettings, responseSchema } =
+      aiLogic.generatePersonalizedInstruction(
+        persona,
+        worldState,
+        isSummer,
+        simulationConfig,
+        timeContextString,
+        job.messages
+      );
+
+    const config = {
+      systemInstruction,
+      responseMimeType: "application/json",
+      responseSchema,
+    };
+    if (safetySettings) config.safetySettings = safetySettings;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents,
+      config,
+    });
+
+    let jsonStr = response.text.trim();
+    const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
+    const match = jsonStr.match(fenceRegex);
+    if (match && match[2]) jsonStr = match[2].trim();
+    const parsed = JSON.parse(jsonStr);
+
+    // Update the job with the AI's response data
+    const currentJob = global.chatJobs[jobKey]; // Re-fetch in case it was cancelled
+    if (currentJob) {
+      currentJob.reply = parsed.reply || "sry, my mind is blank rn...";
+      currentJob.relationshipChange =
+        parseInt(parsed.relationshipChange, 10) || 0;
+      currentJob.isImageRequest = parsed.isImageRequest || false;
+
+      const silentDelay = Math.max(
+        5,
+        parseInt(parsed.responseDelaySeconds, 10) || 15
+      );
+      const typingDurationMs = 3000; // 3 seconds typing animation
+
+      currentJob.typingStartTime = Date.now() + silentDelay * 1000;
+      currentJob.finalEndTime = currentJob.typingStartTime + typingDurationMs;
+
+      console.log(
+        `[Chat Worker] AI for ${persona.name} will reply in ${silentDelay} seconds.`
+      );
+    }
+  } catch (err) {
+    console.error(`[Chat Worker] AI call failed for ${persona.name}:`, err);
+    // Write an error to the user's chat and clean up
+    let worldState = readProfile(userName); // Re-read to prevent race conditions
+    let history = worldState.chatHistories[friendKey] || "";
+    history += `\n\nSystem: (${getTimestamp()}) Error - My brain is broken, couldn't connect to the mothership. Try again later.`;
+    worldState.chatHistories[friendKey] = history;
+    worldState.lastInteractionTimestamps[friendKey] = new Date().toISOString();
+    writeProfile(userName, worldState);
+    delete global.chatJobs[jobKey];
+  }
+}
+
+// --- Image Generation ---
 async function generateImageInBackground(jobId, persona, userName) {
   try {
     console.log(
@@ -78,73 +201,6 @@ async function generateImageInBackground(jobId, persona, userName) {
       persona: persona,
       userName: userName,
     };
-  }
-}
-
-async function summarizeHistory(historyText, userName, personaName) {
-  console.log(
-    `[AI] Summarizing chat history between ${userName} and ${personaName}.`
-  );
-  const summarizationPrompt = `You are an expert summarizer. Below is a chat history between a user named "${userName}" and a character named "${personaName}". Your task is to create a concise, third-person summary of the key events, topics discussed, and the overall state of their relationship. Focus on facts that would be important for ${personaName} to remember in future conversations.
-
-Example:
-- The user and ${personaName} bonded over their shared love for 90s rock music.
-- ${personaName} revealed they have a crush on another character named Kevin.
-- The user gave ${personaName} advice about a school project.
-- Their relationship is friendly and trusting.
-
-Do not include greetings or conversational fluff. Output only the summary.
-
-CHAT HISTORY:
----
-${historyText}
----
-END OF CHAT HISTORY.
-
-Provide your summary now.`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: summarizationPrompt }] }],
-    });
-    return response.text.trim();
-  } catch (err) {
-    console.error(
-      `[AI Summarizer] Error summarizing history for ${personaName}:`,
-      err
-    );
-    return `// Summary generation failed. Last known topic: ${historyText.slice(
-      -200
-    )}`;
-  }
-}
-
-async function analyzeUserPreference(userMessage) {
-  const analysisPrompt = `Analyze the following user message to determine if it expresses a strong, direct preference for a topic. The topic should be a noun or noun phrase. Respond ONLY with a JSON object with the keys "action" (either "like", "dislike", or "none") and "topic" (the subject of the preference, normalized to lowercase).
-
-User Message: "${userMessage}"
-
-Examples:
-- "I love The Cure, fyi" -> {"action": "like", "topic": "the cure"}
-- "Pop music is super lame." -> {"action": "dislike", "topic": "pop music"}
-- "what other shows you like?" -> {"action": "none", "topic": null}
-- "I agree" -> {"action": "none", "topic": null}`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: analysisPrompt }] }],
-      config: { responseMimeType: "application/json" },
-    });
-    let jsonStr = response.text.trim();
-    const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
-    const match = jsonStr.match(fenceRegex);
-    if (match && match[2]) jsonStr = match[2].trim();
-    return JSON.parse(jsonStr);
-  } catch (e) {
-    console.error("[PREFERENCE ANALYSIS] Failed:", e);
-    return { action: "none", topic: null };
   }
 }
 
@@ -228,21 +284,22 @@ const getBuddyListPage = (req, res) => {
 const getChatPage = (req, res) => {
   const { friend: friendKey, status, view } = req.query;
   const { userName } = req.session;
-  const worldState = req.worldState;
+  let worldState = req.worldState; // Use let as it can be modified
   const isFrameView = view === "frame";
+  const simulationConfig = getSimulationConfig();
 
   const persona = ALL_PERSONAS.find((p) => p.key === friendKey);
   if (!persona) {
     return res.status(404).send("Error: Friend not found.");
   }
 
-  const isBlocked =
-    worldState.moderation[friendKey] &&
-    worldState.moderation[friendKey].blocked;
+  const isBlocked = worldState.moderation[friendKey]?.blocked;
   const isOffline = status === "offline";
-
   let history = worldState.chatHistories[friendKey];
+  let isTyping = false;
+  let metaRefreshTag = `<meta http-equiv="refresh" content="60">`; // Default long poll
 
+  // Initialize history if it doesn't exist
   if (!history) {
     if (isBlocked) {
       history = `System: (${getTimestamp()}) You have been blocked by ${
@@ -267,8 +324,73 @@ const getChatPage = (req, res) => {
     }
     worldState.chatHistories[friendKey] = history;
     writeProfile(userName, worldState);
-  } else {
-    history += `\n\nSystem: (${getTimestamp()}) --- Session Resumed ---`;
+  }
+
+  // --- Main Chat Job State Machine ---
+  const jobKey = `${userName}_${friendKey}`;
+  const job = global.chatJobs[jobKey];
+
+  if (job) {
+    // A job exists, check its state.
+    const now = Date.now();
+    // A job is only finished if it has a finalEndTime and it has passed.
+    const isFinished = job.finalEndTime && now >= job.finalEndTime;
+    // A job is only typing if it has a typingStartTime and it has passed, but is not yet finished.
+    const isCurrentlyTyping =
+      job.typingStartTime && now >= job.typingStartTime && !isFinished;
+
+    if (isFinished) {
+      // The wait is over. Finalize the response.
+      // Defensive check: Ensure the job is valid before processing.
+      if (job.reply) {
+        const replyText = job.reply.trim();
+        history += `\n\n${persona.name}: (${getTimestamp()}) ${replyText}`;
+
+        // Only update score if we have a valid relationshipChange from the job
+        if (
+          job.relationshipChange !== undefined &&
+          !isNaN(job.relationshipChange)
+        ) {
+          const oldScore = worldState.userScores[friendKey];
+          worldState.userScores[friendKey] = clamp(
+            oldScore + job.relationshipChange,
+            0,
+            100
+          );
+
+          if (
+            getRelationshipTier(simulationConfig, oldScore) !==
+            getRelationshipTier(
+              simulationConfig,
+              worldState.userScores[friendKey]
+            )
+          ) {
+            delete worldState.instructionCache[friendKey];
+          }
+        }
+        worldState.lastInteractionTimestamps[friendKey] =
+          new Date().toISOString();
+      } else {
+        // This is a broken/failed job. Log it and inform the user gracefully.
+        console.error(
+          `[Chat] Found a finished but invalid job for ${jobKey}. Cleaning up.`
+        );
+        history += `\n\nSystem: (${getTimestamp()}) I'm at a loss for words... something went wrong. Please try again.`;
+      }
+
+      // Write the updated history and clean up the job regardless of success or failure.
+      worldState.chatHistories[friendKey] = history;
+      writeProfile(userName, worldState);
+      delete global.chatJobs[jobKey];
+    } else if (isCurrentlyTyping) {
+      // We are in the typing period.
+      isTyping = true;
+      metaRefreshTag = `<meta http-equiv="refresh" content="3; URL=${req.originalUrl}">`;
+    } else {
+      // We are in the silent waiting period.
+      isTyping = false;
+      metaRefreshTag = `<meta http-equiv="refresh" content="7; URL=${req.originalUrl}">`;
+    }
   }
 
   res.send(
@@ -278,6 +400,8 @@ const getChatPage = (req, res) => {
       history,
       isOffline,
       isBlocked,
+      isTyping,
+      metaRefreshTag,
       showScores: req.session.showScores || false,
       isFrameView,
     })
@@ -285,444 +409,79 @@ const getChatPage = (req, res) => {
 };
 
 const postChatMessage = async (req, res) => {
-  const { prompt, friend: friendKey, history: historyBase64 } = req.body;
+  const { prompt, friend: friendKey } = req.body;
   const { userName } = req.session;
   let worldState = req.worldState;
   const isFrameView = req.query.view === "frame";
-  const simulationConfig = getSimulationConfig();
 
   const persona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
-  let history = Buffer.from(historyBase64, "base64").toString("utf8");
-  const showScores = req.session.showScores || false;
 
-  if (!persona) {
-    return res.status(404).send("Error: Friend not found.");
+  if (
+    !persona ||
+    !prompt ||
+    !prompt.trim() ||
+    worldState.moderation[friendKey]?.blocked
+  ) {
+    let redirectUrl = `/chat?friend=${friendKey}`;
+    if (isFrameView) redirectUrl += "&view=frame";
+    return res.redirect(redirectUrl);
   }
 
-  if (!prompt || !prompt.trim() || worldState.moderation[friendKey]?.blocked) {
-    return res.send(
-      renderChatWindowPage({
-        persona,
-        worldState,
-        history,
-        isBlocked: worldState.moderation[friendKey]?.blocked,
-        showScores,
-        isFrameView,
-      })
-    );
-  }
+  // --- Time-Aware Logic ---
+  let timeContextString = null;
+  worldState.lastInteractionTimestamps =
+    worldState.lastInteractionTimestamps || {};
+  const lastInteraction = worldState.lastInteractionTimestamps[friendKey];
 
-  const now = new Date();
-  const utcHour = now.getUTCHours();
-  const currentHour = (utcHour + TIMEZONE_OFFSET + 24) % 24;
-  const currentMonth = now.getUTCMonth();
-  const currentDay = now.getUTCDay();
-  const isSummer = currentMonth >= 6 && currentMonth <= 7;
-  const isWeekend = currentDay === 0 || currentDay === 6;
-  const dayTypeKey = isWeekend ? "weekend" : "weekday";
+  if (lastInteraction) {
+    const hoursDiff =
+      (new Date() - new Date(lastInteraction)) / (1000 * 60 * 60);
 
-  history += `\n\n${userName}: (${getTimestamp()}) ${prompt.trim()}`;
-
-  // --- R-Rated Content Filter ---
-  if (simulationConfig.featureToggles.enableRRatedFilter) {
-    const filterResult = await checkRRatedContent(
-      prompt.trim(),
-      persona,
-      worldState,
-      simulationConfig
-    );
-    if (filterResult.violation) {
-      worldState = filterResult.worldState;
-      history += `\n\n${persona.name}: (${getTimestamp()}) ${
-        filterResult.reply
-      }`;
-
-      worldState.chatHistories[friendKey] = history;
-      writeProfile(userName, worldState);
-
-      return res.send(
-        renderChatWindowPage({
-          persona,
-          worldState,
-          history,
-          isBlocked: worldState.moderation[friendKey]?.blocked,
-          showScores,
-          isFrameView,
-        })
-      );
-    }
-  }
-
-  let isStillOnline = false;
-  let activeSchedule = [];
-
-  if (persona.schedules.schoolYear && persona.schedules.summer) {
-    const seasonKey = isSummer ? "summer" : "schoolYear";
-    const scheduleSource = persona.schedules[seasonKey];
-    if (scheduleSource) {
-      activeSchedule = scheduleSource[dayTypeKey] || [];
-    }
-  } else {
-    activeSchedule = persona.schedules[dayTypeKey] || [];
-  }
-
-  if (activeSchedule) {
-    for (const window of activeSchedule) {
-      const [start, end] = window;
-      if (start <= end) {
-        if (currentHour >= start && currentHour < end) {
-          isStillOnline = true;
-          break;
-        }
-      } else {
-        if (currentHour >= start || currentHour < end) {
-          isStillOnline = true;
-          break;
-        }
-      }
-    }
-  }
-
-  if (!isStillOnline) {
-    console.log(`[REAL-TIME] ${persona.name} went offline during chat.`);
-    const goodbye = persona.goodbyeLine || "Hey, I gotta go now.";
-    history += `\n\n${persona.name}: (${getTimestamp()}) ${goodbye}`;
-    worldState.chatHistories[friendKey] = history;
-    writeProfile(userName, worldState);
-    const statusUpdate = {
-      key: friendKey,
-      icon: "/icq-offline.gif",
-      className: "buddy offline-buddy",
-    };
-    return res.send(
-      renderChatWindowPage({
-        persona,
-        worldState,
-        history,
-        isOffline: true,
-        showScores,
-        statusUpdate,
-        isFrameView,
-      })
-    );
-  }
-
-  let statusUpdate = null;
-
-  try {
-    const contents = aiLogic.buildHistoryForApi(history, userName);
-
-    let instructionPayload = worldState.instructionCache[friendKey];
-    if (!instructionPayload) {
-      console.log(
-        `[AI] Instruction cache miss for ${persona.name}. Generating new instruction.`
-      );
-      const summary = worldState.chatSummaries[friendKey] || null;
-      instructionPayload = aiLogic.generatePersonalizedInstruction(
-        persona,
-        worldState,
-        isSummer,
-        simulationConfig,
-        summary
-      );
-      worldState.instructionCache[friendKey] = instructionPayload;
-    } else {
-      console.log(`[AI] Instruction cache hit for ${persona.name}.`);
-    }
-
-    const { systemInstruction, safetySettings } = instructionPayload;
-
-    const config = {
-      systemInstruction,
-      responseMimeType: "application/json",
-    };
-
-    if (safetySettings) {
-      config.safetySettings = safetySettings;
-    }
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents,
-      config,
-    });
-
-    let jsonStr = response.text.trim();
-    const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
-    const match = jsonStr.match(fenceRegex);
-    if (match && match[2]) {
-      jsonStr = match[2].trim();
-    }
-    const parsed = JSON.parse(jsonStr);
-    let invalidateCache = false;
-
-    if (parsed.isImageRequest) {
-      const jobId = uuidv4();
-      global.imageJobs[jobId] = { status: "pending" };
-      generateImageInBackground(jobId, persona, userName);
-
-      history += `\n\n${persona.name}: (${getTimestamp()}) Yeah, hold on...`;
-      history += `\n\nSystem: (${getTimestamp()}) ${
-        persona.name
-      } is taking a picture. This might take a moment. The window will refresh automatically.`;
-
-      worldState.chatHistories[friendKey] = history;
-      writeProfile(userName, worldState);
-
-      let refreshUrl = `/check-image?jobId=${jobId}&friend=${friendKey}`;
-      if (isFrameView) refreshUrl += "&view=frame";
-      const metaRefreshTag = `<meta http-equiv="refresh" content="15; URL=${refreshUrl}">`;
-
-      return res.send(
-        renderChatWindowPage({
-          persona,
-          worldState,
-          history,
-          metaRefreshTag,
-          showScores,
-          isFrameView,
-        })
-      );
-    }
-
-    if (parsed.cheatingDetected === true) {
-      console.log(`[SOCIAL] Cheating by ${userName} detected!`);
-      const currentPartners = FRIEND_PERSONAS.filter(
-        (p) => worldState.relationships[p.key]?.dating === "user_player"
-      );
-      currentPartners.forEach((partner) => {
-        worldState.relationships[partner.key].dating = null;
-        worldState.userScores[partner.key] =
-          simulationConfig.datingRules.cheatingPenaltyScore;
+    if (hoursDiff > 24) {
+      timeContextString =
+        "It is a new day. Greet the user and ask a follow-up question about your last conversation if appropriate.";
+    } else if (hoursDiff > 1) {
+      let history = worldState.chatHistories[friendKey] || "";
+      const lastLine = history.split("\n\n").pop() || "";
+      if (persona.goodbyeLine && !lastLine.includes(persona.goodbyeLine)) {
         console.log(
-          `[CACHE] Invalidating cache for ${partner.name} due to cheating.`
+          `[Time Aware] Over an hour since last chat with ${persona.name}.`
         );
-        delete worldState.instructionCache[partner.key];
-      });
-      history += `\n\nSystem: (${getTimestamp()}) ${
-        parsed.reply || "Word got around that you were seeing multiple people."
-      }`;
-    } else if (parsed.startDating === true) {
-      console.log(`[SOCIAL] User ${userName} is now dating ${persona.name}.`);
-      invalidateCache = true;
-      const oldPartnerKey = worldState.relationships[persona.key].dating;
-      if (oldPartnerKey && oldPartnerKey !== "user_player") {
-        const oldPartner = FRIEND_PERSONAS.find((p) => p.key === oldPartnerKey);
-        if (oldPartner) {
-          console.log(
-            `[SOCIAL] ${persona.name} dumped ${oldPartner.name}. Applying -40 relationship penalty.`
-          );
-          worldState.userScores[oldPartnerKey] = clamp(
-            worldState.userScores[oldPartnerKey] - 40,
-            0,
-            100
-          );
-          worldState.relationships[oldPartnerKey].dating = null;
-          worldState.relationships[oldPartnerKey].previousPartner = persona.key;
-        }
-      }
-      worldState.relationships[persona.key].dating = "user_player";
-      worldState.relationships[persona.key].previousPartner = oldPartnerKey;
-    }
-
-    if (parsed.userRevealedAge === true) {
-      console.log(
-        `[SOCIAL] User ${userName} revealed their true age to ${persona.name}.`
-      );
-      invalidateCache = true;
-      worldState.ageKnowledge[friendKey] = { knows: true, source: "user" };
-      const sourcePersona = FRIEND_PERSONAS.find((p) => p.key === friendKey);
-      if (
-        sourcePersona &&
-        (sourcePersona.group === "student" ||
-          sourcePersona.group === "townie_alumni")
-      ) {
-        const { gossipChance, gossipScope } = simulationConfig.socialRules;
-        if (Math.random() < gossipChance) {
-          const gossipGroup = FRIEND_PERSONAS.filter(
-            (p) =>
-              p.group === sourcePersona.group && p.key !== sourcePersona.key
-          );
-          const shuffledGroup = shuffleArray(gossipGroup);
-          const targets = shuffledGroup.slice(0, gossipScope);
-
-          console.log(
-            `[GOSSIP] Gossip triggered! ${sourcePersona.name} is telling ${targets.length} other people in their group.`
-          );
-          targets.forEach((member) => {
-            if (!worldState.ageKnowledge[member.key]) {
-              worldState.ageKnowledge[member.key] = {
-                knows: true,
-                source: friendKey,
-              };
-              console.log(
-                `[CACHE] Invalidating cache for ${member.name} due to gossip.`
-              );
-              delete worldState.instructionCache[member.key];
-            }
-          });
-        } else {
-          console.log(
-            `[GOSSIP] Gossip chance failed. ${sourcePersona.name} keeps the secret.`
-          );
-        }
+        timeContextString =
+          "It has been over an hour since you last spoke, and the user did not say goodbye. Ask them where they went or what they were up to.";
       }
     }
-
-    const reply = parsed.reply || "sry, my mind is blank rn...";
-    const change = parseInt(parsed.relationshipChange, 10) || 0;
-
-    const oldScore = worldState.userScores[friendKey];
-    worldState.userScores[friendKey] = clamp(oldScore + change, 0, 100);
-    const newScore = worldState.userScores[friendKey];
-
-    const oldTier = getRelationshipTier(simulationConfig, oldScore);
-    const newTier = getRelationshipTier(simulationConfig, newScore);
-    if (oldTier !== newTier) {
-      console.log(
-        `[CACHE] Invalidating cache for ${persona.name} due to relationship tier change (${oldTier} -> ${newTier}).`
-      );
-      invalidateCache = true;
-    }
-
-    if (
-      newScore <= simulationConfig.socialRules.hostileThreshold &&
-      oldScore > simulationConfig.socialRules.hostileThreshold
-    ) {
-      worldState.moderation[friendKey].blocked = true;
-      statusUpdate = {
-        key: friendKey,
-        icon: "/icq-blocked.gif",
-        className: "buddy blocked-buddy",
-      };
-      console.log(`[REAL-TIME] ${userName} was blocked by ${persona.name}.`);
-    } else if (
-      newScore >= simulationConfig.socialRules.bffThreshold &&
-      oldScore < simulationConfig.socialRules.bffThreshold
-    ) {
-      statusUpdate = {
-        key: friendKey,
-        icon: isStillOnline ? "/icq-bff.gif" : "/icq-offline.gif",
-        className: isStillOnline ? "buddy bff-buddy" : "buddy offline-buddy",
-      };
-      console.log(`[REAL-TIME] ${userName} is now BFFs with ${persona.name}.`);
-    } else if (
-      newScore < simulationConfig.socialRules.bffThreshold &&
-      oldScore >= simulationConfig.socialRules.bffThreshold
-    ) {
-      statusUpdate = {
-        key: friendKey,
-        icon: isStillOnline ? "/icq-online.gif" : "/icq-offline.gif",
-        className: isStillOnline ? "buddy" : "buddy offline-buddy",
-      };
-      if (worldState.relationships[friendKey]?.dating === "user_player") {
-        console.log(
-          `[SOCIAL] ${persona.name} broke up with ${userName} because their score dropped.`
-        );
-        history += `\n\nSystem: (${getTimestamp()}) ${
-          persona.name
-        } is no longer your partner because your friendship cooled.`;
-        worldState.relationships[friendKey].dating = null;
-        const exPartnerKey =
-          worldState.relationships[friendKey].previousPartner;
-        if (exPartnerKey) {
-          worldState.userScores[exPartnerKey] = clamp(
-            worldState.userScores[exPartnerKey] +
-              simulationConfig.datingRules.breakupForgivenessBonus,
-            0,
-            100
-          );
-          console.log(
-            `[SOCIAL] ${exPartnerKey}'s opinion of you has improved.`
-          );
-        }
-      }
-      console.log(
-        `[REAL-TIME] ${userName} is no longer BFFs with ${persona.name}.`
-      );
-    }
-
-    if (invalidateCache) {
-      delete worldState.instructionCache[friendKey];
-    }
-
-    history += `\n\n${persona.name}: (${getTimestamp()}) ${reply.trim()}`;
-
-    if (simulationConfig.featureToggles.enableHonestySystem) {
-      const preference = await analyzeUserPreference(prompt.trim());
-      if (preference.action === "like" && preference.topic) {
-        if (
-          !worldState.userDislikes[preference.topic] &&
-          !worldState.userLikes[preference.topic]
-        ) {
-          console.log(
-            `[PREFERENCE] User likes '${preference.topic}'. Told to ${persona.name}.`
-          );
-          worldState.userLikes[preference.topic] = friendKey;
-        }
-      } else if (preference.action === "dislike" && preference.topic) {
-        if (
-          !worldState.userLikes[preference.topic] &&
-          !worldState.userDislikes[preference.topic]
-        ) {
-          console.log(
-            `[PREFERENCE] User dislikes '${preference.topic}'. Told to ${persona.name}.`
-          );
-          worldState.userDislikes[preference.topic] = friendKey;
-        }
-      }
-    }
-
-    const messages = history.split(
-      /\n\n(?=(?:System:|Image:|(?:[^:]+:\s\([^)]+\)\s)))/
-    );
-    const messageCount = messages.filter(
-      (line) => !line.startsWith("System:") && !line.startsWith("Image:")
-    ).length;
-
-    if (
-      simulationConfig.featureToggles.enableHistoryCondensation &&
-      messageCount >
-        simulationConfig.systemSettings.historyCondensationThreshold
-    ) {
-      console.log(
-        `[HISTORY] Condensation triggered for ${persona.name}. Message count: ${messageCount}`
-      );
-      // Summarize the full history before truncating it.
-      const summary = await summarizeHistory(history, userName, persona.name);
-      worldState.chatSummaries[friendKey] = summary;
-
-      // Truncate the history to only the last few messages, making the summary process transparent to the user.
-      const lastFewMessages = messages.slice(-4).join("\n\n");
-      history = lastFewMessages;
-
-      console.log(
-        `[CACHE] Invalidating cache for ${persona.name} due to history condensation.`
-      );
-      delete worldState.instructionCache[friendKey];
-    }
-  } catch (err) {
-    console.error(
-      `[Friend Controller Error] API call failed for ${persona.name}:`,
-      err
-    );
-    history += `\n\nSystem: (${getTimestamp()}) Error - My brain is broken, couldn't connect to the mothership. Try again later.`;
   }
 
-  worldState.chatHistories[friendKey] = history;
-  writeProfile(userName, worldState);
+  // Append user's message to history immediately
+  worldState.chatHistories[
+    friendKey
+  ] += `\n\n${userName}: (${getTimestamp()}) ${prompt.trim()}`;
+  writeProfile(userName, worldState); // Save immediately so the background job has the latest history
 
-  res.send(
-    renderChatWindowPage({
-      persona,
-      worldState,
-      history,
-      isBlocked: worldState.moderation[friendKey]?.blocked,
-      showScores,
-      statusUpdate,
-      isFrameView,
-    })
+  // --- Job Management ---
+  const jobKey = `${userName}_${friendKey}`;
+  const existingJob = global.chatJobs[jobKey];
+
+  const newMessages = (existingJob ? existingJob.messages : []).concat(
+    prompt.trim()
   );
+
+  if (existingJob) {
+    delete global.chatJobs[jobKey];
+  }
+
+  global.chatJobs[jobKey] = {
+    messages: newMessages,
+    typingStartTime: null,
+    finalEndTime: null,
+  };
+
+  processFriendChatInBackground(userName, friendKey, timeContextString); // Fire-and-forget
+
+  let redirectUrl = `/chat?friend=${friendKey}`;
+  if (isFrameView) redirectUrl += `&view=frame`;
+  res.redirect(redirectUrl);
 };
 
 const getClearChat = (req, res) => {
@@ -733,13 +492,18 @@ const getClearChat = (req, res) => {
 
   if (worldState && worldState.chatHistories) {
     delete worldState.chatHistories[friendKey];
-    if (worldState.chatSummaries) {
-      delete worldState.chatSummaries[friendKey];
-    }
-    if (worldState.instructionCache) {
+    if (worldState.instructionCache)
       delete worldState.instructionCache[friendKey];
-    }
+    // Also clear the interaction timestamp
+    if (worldState.lastInteractionTimestamps)
+      delete worldState.lastInteractionTimestamps[friendKey];
     writeProfile(userName, worldState);
+  }
+
+  // Also clear any pending chat job for this friend
+  const jobKey = `${userName}_${friendKey}`;
+  if (global.chatJobs[jobKey]) {
+    delete global.chatJobs[jobKey];
   }
 
   let redirectUrl = `/chat?friend=${friendKey}`;

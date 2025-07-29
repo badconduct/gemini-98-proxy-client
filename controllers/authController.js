@@ -1,172 +1,331 @@
-const { escapeHtml, loadAsset } = require("../lib/utils");
-const { renderHtmlPage } = require("./pageBuilder");
-const { renderDialogWindow } = require("./components");
-
-function renderLauncherPage(
-  profiles = [],
-  error = null,
-  guestModeEnabled = true,
-  isModernBrowser = false,
-  isGuestOnlyMode = false
-) {
-  const title = "Gemini 98 - Launcher";
-  const header = "ICQ98 Network Login";
-
-  const modernFriendlyOption = isModernBrowser
-    ? `
-    <div style="text-align: center; margin-bottom: 15px; font-size: 11px;">
-        <input type="checkbox" id="modern-view-checkbox" name="view_mode" value="modern" checked>
-        <label for="modern-view-checkbox">Use Modern Friendly View (no pop-ups)</label>
-    </div>
-  `
-    : "";
-
-  let formContent = `
-        <div style="text-align: center; margin-bottom: 20px;">
-          <p>This is a public demo. Please log in as a guest.</p>
-        </div>
-    `;
-
-  let mainButtonsHtml = `
-      <div class="button-container">
-          <a href="/guest-login">Login as Guest</a>
-      </div>
-  `;
-
-  if (!isGuestOnlyMode) {
-    formContent = `
-        <form action="/login" method="POST">
-            ${modernFriendlyOption}
-            <table class="form-table" cellpadding="0" cellspacing="0" style="width: 100%;">
-                <tr>
-                    <td style="text-align: right; font-weight: bold; width: 100px;"><label for="userName-input">User Name:</label></td>
-                    <td><input type="text" id="userName-input" name="userName" required style="width: 100%; box-sizing: border-box;" autocomplete="off" /></td>
-                </tr>
-                <tr>
-                    <td style="text-align: right; font-weight: bold; width: 100px;"><label for="password-input">Password:</label></td>
-                    <td><input type="password" id="password-input" name="password" required style="width: 100%; box-sizing: border-box;" /></td>
-                </tr>
-            </table>
-            <div class="button-container">
-                <input type="submit" value="Login">
-            </div>
-        </form>
-      `;
-
-    const newUserButtonText =
-      profiles.length === 0 ? "Create Administrator" : "New Profile";
-
-    const guestButtonHtml = guestModeEnabled
-      ? `<a href="/guest-login">Login as Guest</a>`
-      : `<span style="display:inline-block; width: 120px;"></span>`;
-
-    mainButtonsHtml = `
-        <div class="button-container">
-            <a href="/new-user">${newUserButtonText}</a>
-            ${guestButtonHtml}
-        </div>
-      `;
-  }
-
-  const bodyContent = `
-      <div style="text-align: center; margin-bottom: 20px;">
-        <img src="/icq-logo.gif" alt="ICQ Logo" width="64" height="64">
-      </div>
-      ${error ? `<div class="error-message">${escapeHtml(error)}</div>` : ""}
-      ${formContent}
-      ${mainButtonsHtml}
-    `;
-
-  return renderDialogWindow({ title, header, bodyContent });
-}
-
-function renderNewUserPage(error = null, isFirstUser = false) {
-  const title = "Gemini 98 - New User";
-  const header = isFirstUser ? "Create Administrator" : "Create New Profile";
-  const submitText = isFirstUser ? "Create Admin" : "Create";
-
-  const bodyContent = `
-        ${error ? `<div class="error-message">${escapeHtml(error)}</div>` : ""}
-        <form action="/create-user" method="POST">
-            <table cellpadding="0" cellspacing="0" style="width: 100%;">
-                <tr><td style="text-align: right; width: 100px;"><label for="userName-input">User Name:</label></td><td><input type="text" id="userName-input" name="userName" autocomplete="off" required style="width: 100%; box-sizing: border-box;" /></td></tr>
-                <tr><td style="text-align: right; width: 100px;"><label for="realName-input">Real Name:</label></td><td><input type="text" id="realName-input" name="realName" autocomplete="off" required style="width: 100%; box-sizing: border-box;" /></td></tr>
-                <tr><td style="text-align: right; width: 100px;"><label for="password-input">Password:</label></td><td><input type="password" id="password-input" name="password" required style="width: 100%; box-sizing: border-box;" /></td></tr>
-                <tr><td style="padding-top: 10px; text-align: right; width: 100px;"><label for="age-input">A/S/L - Age:</label></td><td style="padding-top: 10px;"><input type="text" id="age-input" name="age" required style="width: 50px;" maxlength="2" /></td></tr>
-                <tr><td style="text-align: right; width: 100px;"><label for="sex-input">Sex:</label></td><td><select id="sex-input" name="sex"><option value="M">M</option><option value="F">F</option></select></td></tr>
-                <tr><td style="text-align: right; width: 100px;"><label for="location-input">Location:</label></td><td><input type="text" id="location-input" name="location" autocomplete="off" required style="width: 100%; box-sizing: border-box;" maxlength="50" /></td></tr>
-            </table>
-          <div class="button-container">
-              <input type="submit" value="${submitText}">
-          </div>
-        </form>
-        <div class="button-container">
-            <a href="/">Back to Login</a>
-        </div>
-    `;
-  return renderDialogWindow({ title, header, bodyContent });
-}
-
-function renderLoginSuccessPage(isModernView = false) {
-  const title = "Launch Successful";
-  const styles = `
-      html, body { height: 100%; margin: 0; padding: 0; }
-      body { background-color: #008080; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; }
-      .center-container { width: 100%; height: 100%; }
-      #container { width: 380px; background-color: #C0C0C0; color: #000000; border-top: 2px solid #FFFFFF; border-left: 2px solid #FFFFFF; border-right: 2px solid #000000; border-bottom: 2px solid #000000; padding: 3px; }
-      #content { padding: 20px; text-align: center; border: 1px solid #808080; background: #fff; }
-      h2 { font-size: 14px; margin-top: 10px; margin-bottom: 10px; }
-      p { font-size: 12px; margin-bottom: 20px; line-height: 1.4; }
-      img { margin-bottom: 10px; }
-    `;
-
-  let script;
-  if (isModernView) {
-    // For modern view, just redirect the main window.
-    script = `window.location.href = '/app';`;
-  } else {
-    // For retro view, use the pop-up.
-    script = `
-          try {
-              var buddyWindow = window.open('/buddylist', 'buddy_list_main', 'width=300,height=580,toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes');
-              if (buddyWindow) {
-                  buddyWindow.focus();
-              } else {
-                   var contentDiv = document.getElementById('content');
-                   if(contentDiv) {
-                      contentDiv.innerHTML = '<h2>Launch Failed!</h2><p>A popup blocker may have prevented the application from launching. Please allow popups for this site and try again.</p>';
-                   }
-              }
-          } catch (e) {
-              var contentDiv = document.getElementById('content');
-              if(contentDiv) {
-                  contentDiv.innerHTML = '<h2>Launch Failed!</h2><p>An unexpected error occurred while launching the application.</p>';
-              }
-          }
-      `;
-  }
-
-  const body = `
-      <table class="center-container" cellpadding="0" cellspacing="0">
-        <tr>
-          <td align="center" valign="middle">
-            <div id="container">
-                <div id="content">
-                    <img src="/icq-online.gif" alt="Success" width="32" height="32">
-                    <h2>Application Launched</h2>
-                    <p>Your buddy list has been opened in a new window.<br>You may now close this launcher window.</p>
-                </div>
-            </div>
-          </td>
-        </tr>
-      </table>
-    `;
-
-  return renderHtmlPage({ title, styles, body, scripts: script });
-}
-
-module.exports = {
+const fs = require("fs");
+const path = require("path");
+const { v4: uuidv4 } = require("uuid");
+const {
   renderLauncherPage,
   renderNewUserPage,
   renderLoginSuccessPage,
+} = require("../views/authRenderer");
+const {
+  generateInitialWorldState,
+  readProfile,
+  writeProfile,
+  listProfiles,
+  profileExists,
+} = require("../lib/state-manager");
+const { verifyPassword } = require("../lib/auth");
+const { getSimulationConfig } = require("../lib/config-manager");
+
+const PUBLIC_GUEST_ONLY_MODE = process.env.PUBLIC_GUEST_ONLY_MODE === "true";
+const GUEST_NAMES = ["Alex", "Jordan", "Casey", "Taylor", "Morgan", "Sky"];
+
+const getLauncherPage = (req, res) => {
+  const profiles = listProfiles();
+  const simulationConfig = getSimulationConfig();
+  const guestModeEnabled = simulationConfig.featureToggles.enableGuestMode;
+  res.send(
+    renderLauncherPage(
+      profiles,
+      req.query.error,
+      guestModeEnabled,
+      req.isModernBrowser,
+      PUBLIC_GUEST_ONLY_MODE
+    )
+  );
+};
+
+const getSingleUserLogin = (req, res) => {
+  const profiles = listProfiles();
+  const primeAdminProfile = profiles
+    .map((p) => readProfile(p))
+    .find((p) => p.isPrimeAdmin);
+
+  if (!primeAdminProfile) {
+    return res.redirect("/new-user");
+  }
+
+  req.session.userName = primeAdminProfile.userName;
+  req.session.isAdmin = true;
+
+  req.session.isPrimePortalAuthenticated = true;
+  req.session.primeAdminUserName = primeAdminProfile.userName;
+
+  req.session.save((err) => {
+    if (err) {
+      console.error("Single User Mode session save error:", err);
+      return res.redirect(`/?error=A server error occurred during auto-login.`);
+    }
+    // In single user mode, we can trust the browser detection from the root request.
+    const useModernView = req.isModernBrowser;
+    res.send(renderLoginSuccessPage(useModernView));
+  });
+};
+
+const getNewUserPage = (req, res) => {
+  const profiles = listProfiles();
+  res.send(renderNewUserPage(null, profiles.length === 0));
+};
+
+const postCreateUser = (req, res) => {
+  const { userName, realName, password, age, sex, location } = req.body;
+  const profiles = listProfiles();
+  const isFirstUser = profiles.length === 0;
+
+  if (
+    !userName ||
+    !userName.trim() ||
+    !realName ||
+    !realName.trim() ||
+    !password ||
+    !password.trim() ||
+    !age ||
+    !sex ||
+    !location ||
+    !location.trim()
+  ) {
+    return res.send(renderNewUserPage("All fields are required.", isFirstUser));
+  }
+
+  if (!/^[a-zA-Z0-9_-]+$/.test(userName)) {
+    return res.send(
+      renderNewUserPage(
+        "User Name can only contain letters, numbers, underscores, and hyphens.",
+        isFirstUser
+      )
+    );
+  }
+
+  const ageNum = parseInt(age, 10);
+  if (isNaN(ageNum) || ageNum < 1 || ageNum > 99) {
+    return res.send(
+      renderNewUserPage("Age must be a number between 1 and 99.", isFirstUser)
+    );
+  }
+
+  if (sex !== "M" && sex !== "F") {
+    return res.send(
+      renderNewUserPage("Invalid selection for Sex.", isFirstUser)
+    );
+  }
+
+  if (location.trim().length > 50) {
+    return res.send(
+      renderNewUserPage("Location cannot exceed 50 characters.", isFirstUser)
+    );
+  }
+
+  if (profileExists(userName)) {
+    return res.send(
+      renderNewUserPage(
+        `The user name "${userName}" is already taken.`,
+        isFirstUser
+      )
+    );
+  }
+
+  const isAdmin = isFirstUser;
+  const isPrimeAdmin = isFirstUser;
+
+  const simulationConfig = getSimulationConfig();
+  const worldState = generateInitialWorldState(
+    {
+      userName: userName.trim(),
+      realName: realName.trim(),
+      password: password.trim(),
+      age: ageNum,
+      sex: sex,
+      location: location.trim(),
+      isAdmin: isAdmin,
+      isPrimeAdmin: isPrimeAdmin,
+    },
+    simulationConfig
+  );
+  writeProfile(userName.trim(), worldState);
+
+  res.redirect("/");
+};
+
+const postLogin = (req, res) => {
+  const { userName, password, view_mode } = req.body;
+  if (!userName || !password) {
+    return res.redirect("/?error=Username and password are required.");
+  }
+
+  let worldState = readProfile(userName);
+  const isPasswordCorrect =
+    worldState &&
+    (!worldState.password || verifyPassword(worldState.password, password));
+
+  if (!isPasswordCorrect) {
+    return res.redirect("/?error=Invalid username or password.");
+  }
+
+  const simulationConfig = getSimulationConfig();
+
+  if (req.cookies.icq98_options) {
+    try {
+      const options = JSON.parse(req.cookies.icq98_options);
+      let profileModified = false;
+
+      if (options.resetApplication) {
+        console.log(
+          `[OPTIONS] Full application reset triggered by ${userName}. Deleting all data.`
+        );
+
+        const profilesDir = path.join(__dirname, "..", "profiles");
+        const imagesDir = path.join(
+          __dirname,
+          "..",
+          "public",
+          "generated-images"
+        );
+
+        const clearDir = (dir) => {
+          if (fs.existsSync(dir)) {
+            fs.readdirSync(dir).forEach((file) => {
+              if (file !== "guest_counter.json") {
+                fs.unlinkSync(path.join(dir, file));
+              }
+            });
+          }
+        };
+
+        clearDir(profilesDir);
+        clearDir(imagesDir);
+
+        console.log(
+          `[OPTIONS] All profiles and images deleted. Redirecting to setup.`
+        );
+        res.clearCookie("icq98_options");
+        return req.session.destroy(() => res.redirect("/"));
+      }
+
+      if (options.relationshipLevel && options.relationshipLevel !== -1) {
+        console.log(
+          `[OPTIONS] Setting all relationships to ${options.relationshipLevel} for ${userName}`
+        );
+        Object.keys(worldState.userScores).forEach((key) => {
+          worldState.userScores[key] = options.relationshipLevel;
+        });
+        worldState.userScores["elion_mystic"] = 0;
+        profileModified = true;
+      }
+
+      if (options.showScores) {
+        console.log(
+          `[OPTIONS] Enabling score display for ${userName}'s session.`
+        );
+        req.session.showScores = true;
+      } else {
+        req.session.showScores = false;
+      }
+
+      if (profileModified) {
+        writeProfile(userName, worldState);
+      }
+    } catch (e) {
+      console.error("Error parsing options cookie:", e);
+    }
+    res.clearCookie("icq98_options");
+  }
+
+  req.session.userName = worldState.userName;
+  req.session.isAdmin = worldState.isAdmin || false;
+  worldState.lastLogin = new Date().toISOString();
+  writeProfile(userName, worldState);
+
+  req.session.save((err) => {
+    if (err) {
+      console.error("Session save error:", err);
+      return res.redirect(`/?error=A server error occurred during login.`);
+    }
+    const useModernView = view_mode === "modern";
+    res.send(renderLoginSuccessPage(useModernView));
+  });
+};
+
+const getGuestLogin = (req, res) => {
+  const simulationConfig = getSimulationConfig();
+  if (!simulationConfig.featureToggles.enableGuestMode) {
+    return res.redirect("/?error=Guest mode is currently disabled.");
+  }
+
+  const guestId = uuidv4().split("-")[0];
+  const guestUserName = `Guest-${guestId}`;
+  const randomName =
+    GUEST_NAMES[Math.floor(Math.random() * GUEST_NAMES.length)];
+  const randomAge = 14 + Math.floor(Math.random() * 6);
+  const randomSex = Math.random() < 0.5 ? "M" : "F";
+  const guestPassword = uuidv4();
+
+  const worldState = generateInitialWorldState(
+    {
+      userName: guestUserName,
+      realName: randomName,
+      password: guestPassword,
+      age: randomAge,
+      sex: randomSex,
+      location: "The Internet",
+      isAdmin: false,
+      isPrimeAdmin: false,
+      isGuest: true,
+    },
+    simulationConfig
+  );
+
+  worldState.lastLogin = new Date().toISOString();
+  writeProfile(guestUserName, worldState);
+
+  const counterPath = path.join(
+    __dirname,
+    "..",
+    "profiles",
+    "guest_counter.json"
+  );
+  let guestData = { count: 0 };
+  if (fs.existsSync(counterPath)) {
+    try {
+      guestData = JSON.parse(fs.readFileSync(counterPath, "utf8"));
+    } catch (e) {
+      console.error("Error reading guest counter, resetting.", e);
+    }
+  }
+  guestData.count = (guestData.count || 0) + 1;
+  fs.writeFileSync(counterPath, JSON.stringify(guestData));
+
+  req.session.userName = worldState.userName;
+  req.session.isAdmin = worldState.isAdmin;
+  req.session.isGuest = true;
+
+  req.session.save((err) => {
+    if (err) {
+      console.error("Session save error for guest:", err);
+      return res.redirect(
+        `/?error=A server error occurred during guest login.`
+      );
+    }
+    const userAgent = req.get("User-Agent") || "";
+    const useModernView = !userAgent.includes("MSIE");
+    res.send(renderLoginSuccessPage(useModernView));
+  });
+};
+
+const getLogout = (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error("Session destruction error:", err);
+      return res.status(500).send("Could not log you out.");
+    }
+    res.redirect("/");
+  });
+};
+
+module.exports = {
+  getLauncherPage,
+  getNewUserPage,
+  postCreateUser,
+  postLogin,
+  getLogout,
+  getGuestLogin,
+  getSingleUserLogin,
 };

@@ -6,7 +6,13 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { loadAsset } = require("./lib/utils");
-const { readProfile, listProfiles } = require("./lib/state-manager");
+const {
+  readProfile,
+  listProfiles,
+  writeProfile,
+} = require("./lib/state-manager");
+const { summarizeChatHistory } = require("./lib/ai-logic");
+const { getSimulationConfig } = require("./lib/config-manager");
 const authController = require("./controllers/authController");
 const appController = require("./controllers/appController");
 const adminController = require("./controllers/adminController");
@@ -21,6 +27,7 @@ const DISABLE_PRIME_ADMIN = process.env.DISABLE_PRIME_ADMIN === "true";
 const PUBLIC_GUEST_ONLY_MODE = process.env.PUBLIC_GUEST_ONLY_MODE === "true";
 
 global.imageJobs = {}; // In-memory store for image generation job status
+global.chatJobs = {}; // In-memory store for chat response jobs
 
 // --- Directory Setup ---
 const profilesDir = path.join(__dirname, "profiles");
@@ -216,6 +223,7 @@ if (!DISABLE_PRIME_ADMIN) {
   app.get(
     "/primeadmin/dashboard",
     requirePrimePortalAuth,
+    detectModernBrowser,
     primeAdminController.getDashboardPage
   );
   app.post(
@@ -364,8 +372,85 @@ function cleanupGuestProfiles() {
   });
 }
 
-// Start the cleanup task
-setInterval(cleanupGuestProfiles, CLEANUP_INTERVAL_MINUTES * 60 * 1000);
+// --- Daily Chat Condensation Cron Job ---
+async function runDailyChatCondensation() {
+  console.log("[CRON] Running daily task to summarize inactive chats...");
+  const simulationConfig = getSimulationConfig();
+  if (!simulationConfig.featureToggles.enableHistoryCondensation) {
+    console.log("[CRON] Chat history condensation is disabled. Skipping task.");
+    return;
+  }
+
+  const profileNames = listProfiles();
+  const now = new Date();
+
+  for (const name of profileNames) {
+    const profile = readProfile(name);
+    if (
+      !profile ||
+      profile.isGuest ||
+      !profile.chatHistories ||
+      !profile.lastInteractionTimestamps
+    ) {
+      continue;
+    }
+
+    for (const friendKey in profile.chatHistories) {
+      const lastInteraction = profile.lastInteractionTimestamps[friendKey];
+      if (!lastInteraction) continue;
+
+      const hoursDiff = (now - new Date(lastInteraction)) / (1000 * 60 * 60);
+
+      // Condense if inactive for more than a day
+      if (hoursDiff > 24) {
+        const history = profile.chatHistories[friendKey];
+        if (!history) continue;
+
+        const isAlreadySummary = history.startsWith(
+          "System: (This is a summary"
+        );
+        // Only count messages for raw, non-summary history.
+        const messageCount = isAlreadySummary
+          ? 0
+          : (history.match(/\n\n/g) || []).length + 1;
+
+        const isLongDetailedChat =
+          messageCount >=
+          simulationConfig.systemSettings.historyCondensationThreshold;
+        // A summary is considered "long" if it's more than a single sentence, prompting re-summarization.
+        const isLongSummary = isAlreadySummary && history.length > 150;
+
+        if (isLongDetailedChat || isLongSummary) {
+          console.log(
+            `[CRON] Condensing chat history for ${name} with ${friendKey}...`
+          );
+          try {
+            // Pass `isAlreadySummary` to the AI logic so it can use a more aggressive summarization prompt.
+            const summary = await summarizeChatHistory(
+              history,
+              isAlreadySummary
+            );
+            if (summary) {
+              profile.chatHistories[
+                friendKey
+              ] = `System: (This is a summary of your conversation from yesterday.)\n${summary}`;
+              writeProfile(name, profile);
+              console.log(
+                `[CRON] Successfully condensed chat for ${name} with ${friendKey}.`
+              );
+            }
+          } catch (e) {
+            console.error(
+              `[CRON] Failed to condense chat for ${name} with ${friendKey}:`,
+              e
+            );
+          }
+        }
+      }
+    }
+  }
+  console.log("[CRON] Daily chat summarization task complete.");
+}
 
 // --- Start Server ---
 const HOST = process.env.HOST || "localhost"; // Use "localhost" for local dev
@@ -389,4 +474,11 @@ app.listen(PORT, HOST, () => {
   console.log(
     `Guest profile cleanup will run every ${CLEANUP_INTERVAL_MINUTES} minutes.`
   );
+
+  // Start the background jobs
+  setInterval(cleanupGuestProfiles, CLEANUP_INTERVAL_MINUTES * 60 * 1000);
+
+  // Run daily condensation job once on startup, then every 24 hours
+  runDailyChatCondensation();
+  setInterval(runDailyChatCondensation, 24 * 60 * 60 * 1000);
 });

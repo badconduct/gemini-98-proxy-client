@@ -252,6 +252,7 @@ function renderChatWindowPage({
   history,
   isOffline = false,
   isBlocked = false,
+  isJobActive = false,
   metaRefreshTag = "",
   showScores = false,
   statusUpdate = null,
@@ -259,7 +260,6 @@ function renderChatWindowPage({
 }) {
   const { userName } = worldState;
   const friendKey = persona.key;
-  const historyBase64 = Buffer.from(history).toString("base64");
   const chatHistoryHtml = renderChatMessagesHtml(history, userName);
 
   let relationshipScoreText = "";
@@ -272,7 +272,8 @@ function renderChatWindowPage({
     relationshipScoreText = `Relationship: ${worldState.userScores[friendKey]}/100`;
   }
 
-  const isDisabled = isOffline || isBlocked || metaRefreshTag !== "";
+  const isBot = UTILITY_BOTS.some((p) => p.key === friendKey);
+  const isDisabled = isOffline || isBlocked; // Input is only disabled if offline/blocked
 
   let promptText = "";
   if (isBlocked) {
@@ -281,10 +282,13 @@ function renderChatWindowPage({
     promptText = "The user is currently offline.";
   }
 
-  // Escape the prompt text for use inside a JavaScript string literal
-  const escapedPromptTextJs = promptText
-    .replace(/'/g, "\\'")
-    .replace(/"/g, '\\"');
+  const typingIndicatorVerb = isBot ? "thinking" : "typing";
+  const typingIndicatorHtml = isJobActive
+    ? `<div id="typing-indicator">
+         <img src="/icq-online.gif" alt="" width="16" height="16">
+         <i>${escapeHtml(persona.name)} is ${typingIndicatorVerb}...</i>
+       </div>`
+    : "";
 
   const headerText = friendPersona
     ? `${escapeHtml(persona.name)}${
@@ -309,6 +313,9 @@ function renderChatWindowPage({
       .message-bot { color: #FF0000; text-align: left; }
       .message-system { color: #808080; font-style: italic; text-align: center; }
       .message img { max-width: 100%; height: auto; }
+      #input-form-container { border: 1px solid #808080; border-top-color: #000; border-left-color: #000; border-right-color: #fff; border-bottom-color: #fff; background: #c0c0c0; padding: 2px; }
+      #typing-indicator { font-size: 10px; color: #333; padding: 2px 5px 4px 5px; font-style: italic; }
+      #typing-indicator img { vertical-align: bottom; margin-right: 4px; }
       #input-form { height: 80px; }
       #prompt-input { width: 100%; height: 50px; box-sizing: border-box; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 10px; border: 2px inset #808080; }
       #prompt-input.disabled { background-color: #C0C0C0; }
@@ -335,38 +342,50 @@ function renderChatWindowPage({
         </tr>
         <tr>
           <td id="form-td">
-            <form id="input-form" action="${postAction}" method="POST" onsubmit="
-              try {
-                var input = document.getElementById('prompt-input');
-                // Use a regex for .trim() to support ancient browsers like IE6.
-                var trimmedValue = input.value.replace(/^\\s+|\\s+$/g, '');
-                if (!input || !input.value || !trimmedValue || trimmedValue === '${escapedPromptTextJs}') { return false; }
+            <div id="input-form-container">
+              ${typingIndicatorHtml}
+              <form id="input-form" action="${postAction}" method="POST" onsubmit="
+                try {
+                  var input = document.getElementById('prompt-input');
+                  var button = document.getElementById('send-button');
+                  var trimmedValue = input.value.replace(/^\\s+|\\s+$/g, '');
 
-                var chatMessages = document.getElementById('chat-messages');
-                var systemMessageDiv = document.createElement('div');
-                systemMessageDiv.className = 'message message-system';
-                systemMessageDiv.innerHTML = '--- Message sent. Waiting for reply... ---';
-                chatMessages.appendChild(systemMessageDiv);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-                input.disabled = true;
-                document.getElementById('send-button').disabled = true;
-                return true;
-              } catch(e) { return true; }
-            ">
-              <textarea id="prompt-input" name="prompt" rows="3" class="${
-                isDisabled ? "disabled" : ""
-              }" ${isDisabled ? "disabled" : ""}>${escapeHtml(
+                  // Prevent submission if input is empty or already submitted
+                  if (!input || !trimmedValue || (button && button.disabled)) {
+                    return false;
+                  }
+
+                  // Disable controls to prevent double submission
+                  if (button) {
+                    button.disabled = true;
+                    button.value = 'Sending...';
+                    button.className = 'disabled';
+                  }
+                  if (input) {
+                    input.disabled = true;
+                    input.className = 'disabled';
+                  }
+                  
+                  return true; // Proceed with submission
+                } catch(e) { 
+                  // In case of error, still allow submission to be safe.
+                  return true; 
+                }
+              ">
+                <textarea id="prompt-input" name="prompt" rows="3" class="${
+                  isDisabled ? "disabled" : ""
+                }" ${isDisabled ? "disabled" : ""}>${escapeHtml(
     promptText
   )}</textarea>
-              <input type="hidden" name="friend" value="${escapeHtml(
-                friendKey
-              )}">
-              <input type="hidden" name="history" value="${historyBase64}">
-              <input type="submit" id="send-button" value="Send" class="${
-                isDisabled ? "disabled" : ""
-              }" ${isDisabled ? "disabled" : ""}>
-              <a id="clear-link" href="#" onclick="${clearScript}">Clear</a>
-            </form>
+                <input type="hidden" name="friend" value="${escapeHtml(
+                  friendKey
+                )}">
+                <input type="submit" id="send-button" value="Send" class="${
+                  isDisabled ? "disabled" : ""
+                }" ${isDisabled ? "disabled" : ""}>
+                <a id="clear-link" href="#" onclick="${clearScript}">Clear</a>
+              </form>
+            </div>
           </td>
         </tr>
       </table>
@@ -378,12 +397,12 @@ function renderChatWindowPage({
             try {
               var viewportHeight = document.compatMode === 'CSS1Compat' ? document.documentElement.clientHeight : document.body.clientHeight;
               var header = document.getElementById('header-td');
-              var form = document.getElementById('form-td');
+              var formContainer = document.getElementById('input-form-container');
               var chatMessagesDiv = document.getElementById('chat-messages');
 
-              if (!header || !form || !chatMessagesDiv) return;
+              if (!header || !formContainer || !chatMessagesDiv) return;
               
-              var nonContentHeight = header.offsetHeight + form.offsetHeight;
+              var nonContentHeight = header.offsetHeight + formContainer.offsetHeight;
               var buffer = 18; 
               var newHeight = viewportHeight - nonContentHeight - buffer;
 
@@ -405,6 +424,13 @@ function renderChatWindowPage({
 
                   var input = document.getElementById('prompt-input');
                   if (input && !input.disabled) {
+                    // Clear placeholder text on focus
+                    var placeholderText = "${escapeHtml(promptText)}";
+                    if (placeholderText && input.value === placeholderText) {
+                        input.onfocus = function() { if (this.value === placeholderText) this.value = ''; };
+                        input.onblur = function() { if (this.value === '') this.value = placeholderText; };
+                    }
+
                     input.focus();
                     input.onkeydown = function(e) {
                       var event = e || window.event;
