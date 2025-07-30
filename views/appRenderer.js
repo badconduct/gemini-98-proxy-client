@@ -98,7 +98,14 @@ function renderBuddyListPage(
   const botKeys = UTILITY_BOTS.map((b) => b.key);
   const botLinks = createLinks(botKeys);
 
-  const logoutScript = `if(confirm('Are you sure you want to log out?')){ if(window.opener && !window.opener.closed){ window.opener.location.href='/logout'; } window.close(); } return false;`;
+  let logoutScript;
+  if (isFrameView) {
+    // For the modern frameset view, redirect the top-level window to log out.
+    logoutScript = `if(confirm('Are you sure you want to log out?')){ top.location.href = '/logout'; } return false;`;
+  } else {
+    // For the classic pop-up view, redirect the opener and close the pop-up.
+    logoutScript = `if(confirm('Are you sure you want to log out?')){ if(window.opener && !window.opener.closed){ window.opener.location.href='/logout'; } window.close(); } return false;`;
+  }
   const aboutScript = `window.open('/about', 'about_window', 'width=350,height=280,resizable=no,scrollbars=no'); return false;`;
 
   let adminLinks = "";
@@ -252,7 +259,7 @@ function renderChatWindowPage({
   history,
   isOffline = false,
   isBlocked = false,
-  isJobActive = false,
+  isTyping = false,
   metaRefreshTag = "",
   showScores = false,
   statusUpdate = null,
@@ -273,28 +280,35 @@ function renderChatWindowPage({
   }
 
   const isBot = UTILITY_BOTS.some((p) => p.key === friendKey);
-  const isDisabled = isOffline || isBlocked; // Input is only disabled if offline/blocked
+  const isDisabled = isOffline || isBlocked || isTyping; // Input disabled if offline, blocked, or AI is typing
 
   let promptText = "";
   if (isBlocked) {
     promptText = "You have been blocked by this user.";
   } else if (isOffline) {
     promptText = "The user is currently offline.";
+  } else if (isTyping) {
+    promptText = ""; // Clear prompt when AI is typing
   }
 
   const typingIndicatorVerb = isBot ? "thinking" : "typing";
-  const typingIndicatorHtml = isJobActive
+  const typingIndicatorHtml = isTyping
     ? `<div id="typing-indicator">
          <img src="/icq-online.gif" alt="" width="16" height="16">
-         <i>${escapeHtml(persona.name)} is ${typingIndicatorVerb}...</i>
+         <i>${escapeHtml(
+           persona.screenName || persona.name
+         )} is ${typingIndicatorVerb}...</i>
        </div>`
     : "";
 
+  const displayName = escapeHtml(persona.screenName || persona.name);
+  const realNameTooltip = `Real Name: ${escapeHtml(persona.name)}`;
+
   const headerText = friendPersona
-    ? `${escapeHtml(persona.name)}${
+    ? `${displayName}${
         relationshipScoreText ? ` (${relationshipScoreText})` : ""
       }`
-    : escapeHtml(persona.name);
+    : displayName;
 
   let postAction = "/chat";
   if (isFrameView) postAction += `?view=frame`;
@@ -332,7 +346,7 @@ function renderChatWindowPage({
       <table id="chat-table" cellpadding="0" cellspacing="0">
         <tr>
           <td id="header-td">
-            <div id="header"><img src="/icq-logo.gif" width="16" height="16">Chat with ${headerText}</div>
+            <div id="header" title="${realNameTooltip}"><img src="/icq-logo.gif" width="16" height="16">Chat with ${headerText}</div>
           </td>
         </tr>
         <tr>
@@ -362,7 +376,7 @@ function renderChatWindowPage({
                     button.className = 'disabled';
                   }
                   if (input) {
-                    input.disabled = true;
+                    input.readOnly = true;
                     input.className = 'disabled';
                   }
                   
@@ -465,7 +479,7 @@ function renderChatWindowPage({
   }
 
   return renderHtmlPage({
-    title: `Chat with ${escapeHtml(persona.name)}`,
+    title: `Chat with ${escapeHtml(persona.screenName || persona.name)}`,
     styles,
     body,
     scripts: script,
@@ -475,6 +489,7 @@ function renderChatWindowPage({
 
 function renderApologyPage(persona, worldState) {
   const friendKey = persona.key;
+  const displayName = escapeHtml(persona.screenName || persona.name);
 
   const styles = `
       body { background-color: #008080; font-family: "MS Sans Serif", "Tahoma", "Verdana", sans-serif; font-size: 12px; margin: 0; padding: 20px; text-align: center; }
@@ -488,11 +503,9 @@ function renderApologyPage(persona, worldState) {
 
   const body = `
       <div id="container">
-        <h1>Apology to ${escapeHtml(persona.name)}</h1>
+        <h1>Apology to ${displayName}</h1>
         <form id="apology-form" action="/apologize" method="POST">
-          <p>You have been blocked by ${escapeHtml(
-            persona.name
-          )}. You have one chance to write a sincere apology. If they accept, you will be unblocked.</p>
+          <p>You have been blocked by ${displayName}. You have one chance to write a sincere apology. If they accept, you will be unblocked.</p>
           <textarea name="apologyText" required></textarea>
           <input type="hidden" name="friend" value="${escapeHtml(friendKey)}">
           <input type="submit" id="submit-button" value="Send Apology">
@@ -501,7 +514,7 @@ function renderApologyPage(persona, worldState) {
     `;
 
   return renderHtmlPage({
-    title: `Apology to ${escapeHtml(persona.name)}`,
+    title: `Apology to ${displayName}`,
     styles,
     body,
   });

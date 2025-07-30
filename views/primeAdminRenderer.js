@@ -60,6 +60,24 @@ function renderPrimeDashboardPage(config) {
     .safety-warning p { margin: 0; font-size: 11px; color: #333; }
     `;
 
+  const scripts = `
+        function toggleDelayInput() {
+            var checkbox = document.getElementById('systemSettings_enableResponseDelaySystem');
+            var numberInput = document.getElementById('systemSettings_maxResponseDelayMinutes');
+            var label = document.getElementById('maxResponseDelayMinutesLabel');
+            if (checkbox && numberInput && label) {
+                numberInput.disabled = !checkbox.checked;
+                label.style.color = checkbox.checked ? '' : '#808080';
+            }
+        }
+        // Run on page load
+        (function() {
+             try {
+                 toggleDelayInput();
+             } catch(e) {}
+        })();
+    `;
+
   const body = `
     <h1>Prime Administration Portal</h1>
     <p class="warning">Warning: Saving these settings will reset the social world for all non-admin users. This cannot be undone.</p>
@@ -279,6 +297,20 @@ function renderPrimeDashboardPage(config) {
                       config.systemSettings.historyCondensationThreshold
                     }" min="10" max="100"></td>
                 </tr>
+                <tr>
+                    <td class="label"><label for="systemSettings_enableResponseDelaySystem">Enable Realistic Response Delay System:</label></td>
+                    <td><input type="checkbox" id="systemSettings_enableResponseDelaySystem" name="systemSettings_enableResponseDelaySystem" value="true" ${
+                      config.systemSettings.enableResponseDelaySystem
+                        ? "checked"
+                        : ""
+                    } onclick="toggleDelayInput()"></td>
+                </tr>
+                <tr>
+                    <td class="label"><label id="maxResponseDelayMinutesLabel" for="systemSettings_maxResponseDelayMinutes">Max Response Delay (Minutes):</label></td>
+                    <td><input type="number" id="systemSettings_maxResponseDelayMinutes" name="systemSettings_maxResponseDelayMinutes" value="${
+                      config.systemSettings.maxResponseDelayMinutes
+                    }" min="1" max="10"></td>
+                </tr>
             </table>
         </fieldset>
 
@@ -294,7 +326,7 @@ function renderPrimeDashboardPage(config) {
         <a href="/">Cancel and Return to Login</a>
     </div>
     `;
-  return renderHtmlPage({ title, styles, body });
+  return renderHtmlPage({ title, styles, body, scripts });
 }
 
 function renderPrimeDashboardFallbackPage(config) {
@@ -616,6 +648,20 @@ function renderPrimeDashboardFallbackPage(config) {
                   config.systemSettings.historyCondensationThreshold,
                   "number",
                   'min="10" max="100"'
+                )}
+                ${renderCheckboxRowHtml(
+                  "Enable Realistic Response Delay System",
+                  "systemSettings_enableResponseDelaySystem",
+                  "systemSettings_enableResponseDelaySystem",
+                  config.systemSettings.enableResponseDelaySystem
+                )}
+                ${renderRow(
+                  "Max Response Delay (Minutes)",
+                  "systemSettings_maxResponseDelayMinutes",
+                  "systemSettings_maxResponseDelayMinutes",
+                  config.systemSettings.maxResponseDelayMinutes,
+                  "number",
+                  'min="1" max="10"'
                 )}
             `
             )}

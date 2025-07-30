@@ -70,9 +70,9 @@ async function processFriendChatInBackground(
       );
       if (filterResult.violation) {
         let history = worldState.chatHistories[friendKey] || "";
-        history += `\n\n${persona.name}: (${getTimestamp()}) ${
-          filterResult.reply
-        }`;
+        history += `\n\n${
+          persona.screenName || persona.name
+        }: (${getTimestamp()}) ${filterResult.reply}`;
         filterResult.worldState.chatHistories[friendKey] = history;
         // Update timestamp even on a filtered reply to prevent repeated time-based greetings
         filterResult.worldState.lastInteractionTimestamps[friendKey] =
@@ -146,7 +146,6 @@ async function processFriendChatInBackground(
     history += `\n\nSystem: (${getTimestamp()}) Error - My brain is broken, couldn't connect to the mothership. Try again later.`;
     worldState.chatHistories[friendKey] = history;
     worldState.lastInteractionTimestamps[friendKey] = new Date().toISOString();
-    writeProfile(userName, worldState);
     delete global.chatJobs[jobKey];
   }
 }
@@ -293,6 +292,7 @@ const getChatPage = (req, res) => {
     return res.status(404).send("Error: Friend not found.");
   }
 
+  const displayName = persona.screenName || persona.name;
   const isBlocked = worldState.moderation[friendKey]?.blocked;
   const isOffline = status === "offline";
   let history = worldState.chatHistories[friendKey];
@@ -302,21 +302,13 @@ const getChatPage = (req, res) => {
   // Initialize history if it doesn't exist
   if (!history) {
     if (isBlocked) {
-      history = `System: (${getTimestamp()}) You have been blocked by ${
-        persona.name
-      }.`;
+      history = `System: (${getTimestamp()}) You have been blocked by ${displayName}.`;
     } else if (isOffline) {
-      history = `System: (${getTimestamp()}) ${
-        persona.name
-      } is currently offline.`;
+      history = `System: (${getTimestamp()}) ${displayName} is currently offline.`;
     } else {
-      history = `System: (${getTimestamp()}) You are now chatting with ${
-        persona.name
-      }.`;
+      history = `System: (${getTimestamp()}) You are now chatting with ${displayName}.`;
       if (persona.openingLine) {
-        history += `\n\n${
-          persona.name
-        }: (${getTimestamp()}) ${persona.openingLine.replace(
+        history += `\n\n${displayName}: (${getTimestamp()}) ${persona.openingLine.replace(
           "{userName}",
           worldState.realName
         )}`;
@@ -344,7 +336,9 @@ const getChatPage = (req, res) => {
       // Defensive check: Ensure the job is valid before processing.
       if (job.reply) {
         const replyText = job.reply.trim();
-        history += `\n\n${persona.name}: (${getTimestamp()}) ${replyText}`;
+        history += `\n\n${
+          persona.screenName || persona.name
+        }: (${getTimestamp()}) ${replyText}`;
 
         // Only update score if we have a valid relationshipChange from the job
         if (
@@ -578,9 +572,9 @@ const postApology = async (req, res) => {
       history = `System: (${getTimestamp()}) Your apology was rejected.`;
     }
 
-    history += `\n\n${persona.name}: (${getTimestamp()}) ${
-      parsed.reply || "..."
-    }`;
+    history += `\n\n${
+      persona.screenName || persona.name
+    }: (${getTimestamp()}) ${parsed.reply || "..."}`;
   } catch (err) {
     console.error("Apology processing error:", err);
     history = `System: (${getTimestamp()}) Error - My brain is broken, couldn't connect to the mothership. Try again later.`;
@@ -622,7 +616,9 @@ const getCheckImageStatus = (req, res) => {
   if (!job || job.userName !== userName) {
     let history =
       worldState.chatHistories[friendKey] ||
-      `System: (${getTimestamp()}) You are now chatting with ${persona.name}.`;
+      `System: (${getTimestamp()}) You are now chatting with ${
+        persona.screenName || persona.name
+      }.`;
     history += `\n\nSystem: (${getTimestamp()}) The connection was lost while taking the picture. Please try again.`;
     worldState.chatHistories[friendKey] = history;
     writeProfile(userName, worldState);
@@ -641,7 +637,9 @@ const getCheckImageStatus = (req, res) => {
 
   let history =
     worldState.chatHistories[friendKey] ||
-    `System: (${getTimestamp()}) You are now chatting with ${persona.name}.`;
+    `System: (${getTimestamp()}) You are now chatting with ${
+      persona.screenName || persona.name
+    }.`;
 
   if (status === "pending") {
     let refreshUrl = `/check-image?jobId=${jobId}&friend=${friendKey}`;
@@ -661,17 +659,17 @@ const getCheckImageStatus = (req, res) => {
 
   if (status === "complete") {
     worldState.receivedFiles.push({
-      senderName: persona.name,
+      senderName: persona.screenName || persona.name,
       senderKey: persona.key,
       url: url,
       date: new Date().toISOString(),
     });
     history += `\n\n${
-      persona.name
+      persona.screenName || persona.name
     }: (${getTimestamp()}) Ok, here it is!\n\nImage: ${url}`;
   } else if (status === "failed") {
     history += `\n\n${
-      persona.name
+      persona.screenName || persona.name
     }: (${getTimestamp()}) Ugh, my camera is broken... not sure what happened. Maybe another time.`;
   }
 

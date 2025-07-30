@@ -110,6 +110,7 @@ const postSaveChanges = (req, res) => {
     socialRules_bffThreshold,
     socialRules_hostileThreshold,
     systemSettings_historyCondensationThreshold,
+    systemSettings_maxResponseDelayMinutes,
   } = req.body;
 
   const featureToggles = {
@@ -168,6 +169,12 @@ const postSaveChanges = (req, res) => {
     systemSettings: {
       historyCondensationThreshold: parseInt(
         systemSettings_historyCondensationThreshold,
+        10
+      ),
+      enableResponseDelaySystem:
+        !!req.body.systemSettings_enableResponseDelaySystem,
+      maxResponseDelayMinutes: parseInt(
+        systemSettings_maxResponseDelayMinutes,
         10
       ),
     },

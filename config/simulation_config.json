@@ -40,6 +40,8 @@
     "enableRRatedFilter": true
   },
   "systemSettings": {
-    "historyCondensationThreshold": 30
+    "historyCondensationThreshold": 30,
+    "enableResponseDelaySystem": true,
+    "maxResponseDelayMinutes": 3
   }
 }

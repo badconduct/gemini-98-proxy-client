@@ -1,9 +1,8 @@
 const { GoogleGenAI } = require("@google/genai");
-const { v4: uuidv4 } = require("uuid");
 const { UTILITY_BOTS } = require("../config/personas");
 const { renderChatWindowPage } = require("../views/appRenderer");
 const { getTimestamp } = require("../lib/utils");
-const { writeProfile, readProfile } = require("../lib/state-manager");
+const { writeProfile } = require("../lib/state-manager");
 const aiLogic = require("../lib/ai-logic");
 
 const apiKey = process.env.API_KEY;
@@ -15,25 +14,35 @@ const ai = new GoogleGenAI({ apiKey });
 // --- Timezone Configuration ---
 const TIMEZONE_OFFSET = parseInt(process.env.TIMEZONE_OFFSET, 10) || 0;
 
-/**
- * Generates and saves the final AI response after a fixed delay for bots.
- * @param {string} userName - The user's name.
- * @param {string} botKey - The bot's key.
- */
-async function triggerBotResponse(userName, botKey) {
-  const jobKey = `${userName}_${botKey}`;
-  const job = global.chatJobs[jobKey];
-
-  if (!job) {
-    console.error(
-      `[Bot Responder] Job ${jobKey} already completed or cancelled.`
-    );
-    return;
-  }
+async function postBotMessage(req, res) {
+  const { prompt, friend: botKey } = req.body;
+  const { userName } = req.session;
+  const worldState = req.worldState;
+  const isFrameView = req.query.view === "frame";
 
   const persona = UTILITY_BOTS.find((p) => p.key === botKey);
-  let worldState = readProfile(userName);
+  if (!persona || !prompt || !prompt.trim()) {
+    let redirectUrl = `/chat?friend=${botKey}`;
+    if (isFrameView) redirectUrl += "&view=frame";
+    return res.redirect(redirectUrl);
+  }
+
+  const displayName = persona.screenName || persona.name;
   let history = worldState.chatHistories[botKey] || "";
+
+  // Initialize history if it's the first message
+  if (!history) {
+    history = `System: (${getTimestamp()}) You are now chatting with ${displayName}.`;
+    if (persona.openingLine) {
+      history += `\n\n${displayName}: (${getTimestamp()}) ${persona.openingLine.replace(
+        "{userName}",
+        worldState.realName
+      )}`;
+    }
+  }
+
+  history += `\n\n${userName}: (${getTimestamp()}) ${prompt.trim()}`;
+
   let reply = "";
 
   try {
@@ -102,56 +111,29 @@ async function triggerBotResponse(userName, botKey) {
         .trim();
     }
 
-    history += `\n\n${persona.name}: (${getTimestamp()}) ${reply}`;
-    worldState.chatHistories[botKey] = history;
+    history += `\n\n${displayName}: (${getTimestamp()}) ${reply}`;
   } catch (err) {
     console.error(`[Bot Responder] Failed for ${persona.name}:`, err);
     history += `\n\nSystem: (${getTimestamp()}) Error - My brain is broken, couldn't connect to the mothership. Try again later.`;
-    worldState.chatHistories[botKey] = history;
   } finally {
+    worldState.chatHistories[botKey] = history;
     writeProfile(userName, worldState);
-    delete global.chatJobs[jobKey];
+
+    // Instead of redirecting, render the page directly with the new content
+    res.send(
+      renderChatWindowPage({
+        persona,
+        worldState,
+        history,
+        isOffline: false,
+        isBlocked: false,
+        isTyping: false,
+        metaRefreshTag: "",
+        showScores: req.session.showScores || false,
+        isFrameView,
+      })
+    );
   }
-}
-
-function postBotMessage(req, res) {
-  const { prompt, friend: botKey } = req.body;
-  const { userName } = req.session;
-  const worldState = req.worldState;
-  const isFrameView = req.query.view === "frame";
-
-  const persona = UTILITY_BOTS.find((p) => p.key === botKey);
-  if (!persona || !prompt || !prompt.trim()) {
-    let redirectUrl = `/chat?friend=${botKey}`;
-    if (isFrameView) redirectUrl += "&view=frame";
-    return res.redirect(redirectUrl);
-  }
-
-  worldState.chatHistories[
-    botKey
-  ] += `\n\n${userName}: (${getTimestamp()}) ${prompt.trim()}`;
-
-  const jobKey = `${userName}_${botKey}`;
-  const botDelay = (2 + Math.random() * 3) * 1000; // 2-5 second delay for bots
-  const existingJob = global.chatJobs[jobKey];
-
-  if (existingJob) {
-    clearTimeout(existingJob.timerId);
-  }
-
-  // Bots don't stack messages, they just process the latest one after a delay.
-  global.chatJobs[jobKey] = {
-    messages: [prompt.trim()],
-    timerId: setTimeout(() => {
-      triggerBotResponse(userName, botKey);
-    }, botDelay),
-  };
-
-  writeProfile(userName, worldState);
-
-  let redirectUrl = `/chat?friend=${botKey}`;
-  if (isFrameView) redirectUrl += `&view=frame`;
-  res.redirect(redirectUrl);
 }
 
 module.exports = {
