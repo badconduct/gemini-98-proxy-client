@@ -1,5 +1,11 @@
 /.env
 /.env.local
-/profiles/
 /node_modules
 /web.config
+# User-generated content and runtime data.
+# These should be handled by persistent storage on Azure, not source control.
+# /profiles/
+# /public/generated-images/
+
+# The simulation config is modified by the app at runtime.
+# /config/simulation_config.json

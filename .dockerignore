@@ -1,0 +1,8 @@
+# Ignore node_modules, as they will be installed inside the container
+node_modules
+
+# Ignore the .env file to keep secrets out of the image
+.env
+
+# Ignore npm debug logs
+npm-debug.log

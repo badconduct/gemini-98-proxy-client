@@ -1,0 +1,226 @@
+{
+  "userName": "h4x0rBob",
+  "realName": "Bob",
+  "password": {
+    "salt": "3a8954390c26339d7d1d0fdc41f2106d",
+    "hash": "1d5ca9839f91e46939f35a5dfdcabe9352d165580c7005fc0826d23239ec0cf5b80e489fdbc43b947c34844e3ad3703d256519bd1364f7e54e0c2d2dd5300dbb"
+  },
+  "age": 42,
+  "sex": "M",
+  "location": "CA",
+  "userRole": "online",
+  "isAdmin": false,
+  "isPrimeAdmin": false,
+  "isGuest": false,
+  "lastLogin": null,
+  "relationships": {
+    "kevin_jock": {
+      "dating": null,
+      "likes": [
+        "jenna_raver",
+        "tiffany_prep"
+      ],
+      "previousPartner": null
+    },
+    "heather_metalhead": {
+      "dating": "brian_nerd",
+      "likes": [],
+      "previousPartner": null
+    },
+    "brian_nerd": {
+      "dating": "heather_metalhead",
+      "likes": [
+        "jessica_drama",
+        "tiffany_prep"
+      ],
+      "previousPartner": null
+    },
+    "tiffany_prep": {
+      "dating": "chris_hiphop",
+      "likes": [
+        "brian_nerd",
+        "mark_slacker"
+      ],
+      "previousPartner": null
+    },
+    "dave_skater": {
+      "dating": "jenna_raver",
+      "likes": [],
+      "previousPartner": null
+    },
+    "jenna_raver": {
+      "dating": "dave_skater",
+      "likes": [
+        "brian_nerd",
+        "mark_slacker"
+      ],
+      "previousPartner": null
+    },
+    "sarah_gamer": {
+      "dating": null,
+      "likes": [],
+      "previousPartner": null
+    },
+    "mike_hacker": {
+      "dating": null,
+      "likes": [],
+      "previousPartner": null
+    },
+    "john_emo": {
+      "dating": "rachel_activist",
+      "likes": [
+        "tiffany_prep"
+      ],
+      "previousPartner": null
+    },
+    "mark_slacker": {
+      "dating": "jessica_drama",
+      "likes": [],
+      "previousPartner": null
+    },
+    "rachel_activist": {
+      "dating": "john_emo",
+      "likes": [],
+      "previousPartner": null
+    },
+    "chris_hiphop": {
+      "dating": "tiffany_prep",
+      "likes": [
+        "rachel_activist",
+        "jenna_raver"
+      ],
+      "previousPartner": null
+    },
+    "jessica_drama": {
+      "dating": "mark_slacker",
+      "likes": [],
+      "previousPartner": null
+    },
+    "elion_mystic": {
+      "dating": null,
+      "likes": [],
+      "previousPartner": null
+    }
+  },
+  "userScores": {
+    "kevin_jock": 50,
+    "heather_metalhead": 50,
+    "brian_nerd": 50,
+    "tiffany_prep": 50,
+    "dave_skater": 50,
+    "jenna_raver": 50,
+    "sarah_gamer": 61,
+    "mike_hacker": 62,
+    "john_emo": 50,
+    "mark_slacker": 50,
+    "rachel_activist": 50,
+    "chris_hiphop": 50,
+    "jessica_drama": 50,
+    "elion_mystic": 0,
+    "code_bot": null,
+    "win98_help_bot": null,
+    "gemini_bot": null,
+    "nostalgia_bot": null
+  },
+  "moderation": {
+    "kevin_jock": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "heather_metalhead": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "brian_nerd": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "tiffany_prep": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "dave_skater": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "jenna_raver": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "sarah_gamer": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "mike_hacker": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "john_emo": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "mark_slacker": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "rachel_activist": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "chris_hiphop": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "jessica_drama": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "elion_mystic": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "code_bot": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "win98_help_bot": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "gemini_bot": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    },
+    "nostalgia_bot": {
+      "warning": false,
+      "blocked": false,
+      "violenceWarning": false
+    }
+  },
+  "ageKnowledge": {},
+  "receivedFiles": [],
+  "chatHistories": {
+    "nostalgia_bot": "System: (09:19:52 AM) You are now chatting with Nostalgia Bot.\n\nNostalgia Bot: (09:19:52 AM) I am Nostalgia Bot. I can provide suggestions for 90s activities or give you hints about your friends.\n\nh4x0rBob: (09:20:06 AM) When is n0c_turnal going online?\n\nNostalgia Bot: (09:20:08 AM) N0c_turnal tends to be more active online later in the evening, Bob."
+  },
+  "instructionCache": {},
+  "chatSummaries": {},
+  "userLikes": {},
+  "userDislikes": {}
+}

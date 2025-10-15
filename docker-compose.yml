@@ -1,0 +1,60 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: "traefik:latest" # Use the latest version of Traefik
+    container_name: "traefik-reverse-proxy"
+    command:
+      - "--api.insecure=true" # Enables the Traefik dashboard (for local dev only)
+      - "--providers.docker=true" # Enables the Docker provider
+      - "--providers.docker.exposedbydefault=false" # Only expose containers with labels
+      - "--entrypoints.web.address=:80" # Define an entrypoint for HTTP traffic on port 80
+    ports:
+      - "80:80" # Map host port 80 to Traefik's port 80
+      - "8080:8080" # Map host port 8080 for the Traefik dashboard
+    volumes:
+      # Mount the Docker socket so Traefik can listen to container events
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    restart: unless-stopped
+
+  app:
+    # 'build: .' tells Docker Compose to build the image from the Dockerfile
+    # in the current directory.
+    build: .
+    # Name the container for easier management
+    container_name: gemini-98-proxy
+    depends_on:
+      - traefik
+    # Restart the container automatically if it stops
+    restart: unless-stopped
+    # Pass environment variables from your local .env file into the container.
+    # This is the most secure and flexible method.
+    env_file:
+      - .env
+    # Define the volumes to persist data.
+    # This links a local directory to a directory inside the container.
+    # Format: "HOST_PATH:CONTAINER_PATH"
+    volumes:
+      # Use named volumes for portability and remote host compatibility.
+      # Docker will manage the storage location on the host machine.
+      - profiles_data:/usr/src/app/profiles
+      - images_data:/usr/src/app/public/generated-images
+      - config_data:/usr/src/app/config
+    # We no longer need to expose the port directly to the host.
+    # Traefik will handle the connection internally.
+    # ports:
+    #   - "3000:3000"
+    labels:
+      # --- Traefik Labels ---
+      - "traefik.enable=true" # Tell Traefik to manage this container
+      # Define the router for HTTP traffic
+      - "traefik.http.routers.gemini98.rule=Host(`98proxy.home.local`)"
+      - "traefik.http.routers.gemini98.entrypoints=web"
+      # Tell Traefik which port the service inside the container is listening on
+      - "traefik.http.services.gemini98.loadbalancer.server.port=3000"
+
+# Define the named volumes at the top level of the compose file.
+volumes:
+  profiles_data:
+  images_data:
+  config_data:
