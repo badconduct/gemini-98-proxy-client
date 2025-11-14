@@ -359,15 +359,16 @@ function renderChatWindowPage({
             <div id="input-form-container">
               ${typingIndicatorHtml}
               <form id="input-form" action="${postAction}" method="POST">
-                <textarea id="prompt-input" name="prompt" rows="3" class="${
+                <textarea id="prompt-input" name="prompt_display" rows="3" class="${
                   isDisabled ? "disabled" : ""
                 }" ${isDisabled ? "disabled" : ""}>${escapeHtml(
     promptText
   )}</textarea>
+                <input type="hidden" id="prompt-hidden-input" name="prompt">
                 <input type="hidden" name="friend" value="${escapeHtml(
                   friendKey
                 )}">
-                <input type="submit" id="send-button" value="Send" class="${
+                <input type="button" id="send-button" value="Send" class="${
                   isDisabled ? "disabled" : ""
                 }" ${isDisabled ? "disabled" : ""}>
                 <a id="clear-link" href="#" onclick="${clearScript}">Clear</a>
@@ -435,43 +436,49 @@ function renderChatWindowPage({
 
                   var input = document.getElementById('prompt-input');
                   var form = document.getElementById('input-form');
+                  var button = document.getElementById('send-button');
+                  var hiddenInput = document.getElementById('prompt-hidden-input');
                   var draftCookieName = 'icq98_draft_${escapeHtml(friendKey)}';
 
                   // --- Form Submission Logic ---
-                  if (form) {
-                      form.onsubmit = function() {
-                          try {
-                              var submitInput = document.getElementById('prompt-input');
-                              var button = document.getElementById('send-button');
-                              // Trim whitespace from the value to check if it's empty
-                              var trimmedValue = submitInput.value.replace(/^\\s+|\\s+$/g, '');
-
-                              // Prevent submission if input is empty/whitespace or button is disabled
-                              if (!submitInput || !trimmedValue || (button && button.disabled)) {
-                                  return false;
-                              }
-
-                              // Disable form elements to prevent resubmission
-                              if (button) {
-                                  button.disabled = true;
-                                  button.value = 'Sending...';
-                                  button.className = 'disabled';
-                              }
-                              if (submitInput) {
-                                  submitInput.readOnly = true;
-                                  submitInput.className = 'disabled';
-                              }
-
-                              // Clear the draft cookie and the input field's value
-                              eraseCookie(draftCookieName);
-                              submitInput.value = ''; // This is the fix
-
-                              return true; // Allow submission
-                          } catch (e) {
-                              // Fallback in case of script error in ancient browsers
-                              return true;
+                  function sendChatMessage() {
+                      try {
+                          var trimmedValue = input.value.replace(/^\\s+|\\s+$/g, '');
+                          if (!trimmedValue || button.disabled) {
+                              return; // Don't send empty messages
                           }
-                      };
+
+                          // 1. Copy value to hidden field for submission
+                          if (hiddenInput) {
+                              hiddenInput.value = input.value;
+                          } else {
+                              // Fallback if the hidden input isn't found
+                              form.submit();
+                              return;
+                          }
+
+                          // 2. Clear the visible textarea and the draft cookie
+                          eraseCookie(draftCookieName);
+                          input.value = '';
+
+                          // 3. Disable controls to prevent resubmission
+                          button.disabled = true;
+                          button.value = 'Sending...';
+                          button.className = 'disabled';
+                          input.readOnly = true;
+                          input.className = 'disabled';
+
+                          // 4. Submit the form
+                          form.submit();
+
+                      } catch (e) {
+                          // Ultimate fallback for ancient browsers
+                          form.submit();
+                      }
+                  }
+                  
+                  if (button) {
+                      button.onclick = sendChatMessage;
                   }
                   
                   if (input && !input.disabled) {
@@ -501,7 +508,7 @@ function renderChatWindowPage({
                         } else {
                           event.returnValue = false;
                         }
-                        document.getElementById('input-form').submit();
+                        sendChatMessage();
                       }
                     };
                   }
