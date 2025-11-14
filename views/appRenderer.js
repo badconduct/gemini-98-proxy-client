@@ -443,12 +443,15 @@ function renderChatWindowPage({
                           try {
                               var submitInput = document.getElementById('prompt-input');
                               var button = document.getElementById('send-button');
+                              // Trim whitespace from the value to check if it's empty
                               var trimmedValue = submitInput.value.replace(/^\\s+|\\s+$/g, '');
 
+                              // Prevent submission if input is empty/whitespace or button is disabled
                               if (!submitInput || !trimmedValue || (button && button.disabled)) {
                                   return false;
                               }
 
+                              // Disable form elements to prevent resubmission
                               if (button) {
                                   button.disabled = true;
                                   button.value = 'Sending...';
@@ -459,9 +462,13 @@ function renderChatWindowPage({
                                   submitInput.className = 'disabled';
                               }
 
+                              // Clear the draft cookie and the input field's value
                               eraseCookie(draftCookieName);
-                              return true;
+                              submitInput.value = ''; // This is the fix
+
+                              return true; // Allow submission
                           } catch (e) {
+                              // Fallback in case of script error in ancient browsers
                               return true;
                           }
                       };
