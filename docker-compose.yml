@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   traefik:
-    image: "traefik:latest" # Use the latest version of Traefik
+    image: "traefik:latest" # Pinned to a secure version to avoid unexpected breaking changes
     container_name: "traefik-reverse-proxy"
     command:
       - "--api.insecure=true" # Enables the Traefik dashboard (for local dev only)

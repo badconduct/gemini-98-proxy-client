@@ -358,34 +358,7 @@ function renderChatWindowPage({
           <td id="form-td">
             <div id="input-form-container">
               ${typingIndicatorHtml}
-              <form id="input-form" action="${postAction}" method="POST" onsubmit="
-                try {
-                  var input = document.getElementById('prompt-input');
-                  var button = document.getElementById('send-button');
-                  var trimmedValue = input.value.replace(/^\\s+|\\s+$/g, '');
-
-                  // Prevent submission if input is empty or already submitted
-                  if (!input || !trimmedValue || (button && button.disabled)) {
-                    return false;
-                  }
-
-                  // Disable controls to prevent double submission
-                  if (button) {
-                    button.disabled = true;
-                    button.value = 'Sending...';
-                    button.className = 'disabled';
-                  }
-                  if (input) {
-                    input.readOnly = true;
-                    input.className = 'disabled';
-                  }
-                  
-                  return true; // Proceed with submission
-                } catch(e) { 
-                  // In case of error, still allow submission to be safe.
-                  return true; 
-                }
-              ">
+              <form id="input-form" action="${postAction}" method="POST">
                 <textarea id="prompt-input" name="prompt" rows="3" class="${
                   isDisabled ? "disabled" : ""
                 }" ${isDisabled ? "disabled" : ""}>${escapeHtml(
@@ -407,6 +380,30 @@ function renderChatWindowPage({
 
   let script = `
         (function() {
+          // --- Cookie Helper Functions (ES3 compatible) ---
+          function setCookie(name, value, days) {
+              var expires = "";
+              if (days) {
+                  var date = new Date();
+                  date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                  expires = "; expires=" + date.toUTCString();
+              }
+              document.cookie = name + "=" + (encodeURIComponent(value) || "") + expires + "; path=/";
+          }
+          function getCookie(name) {
+              var nameEQ = name + "=";
+              var ca = document.cookie.split(';');
+              for (var i = 0; i < ca.length; i++) {
+                  var c = ca[i];
+                  while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+                  if (c.indexOf(nameEQ) == 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+              }
+              return null;
+          }
+          function eraseCookie(name) {
+              document.cookie = name + '=; Max-Age=-99999999; path=/;';
+          }
+
           function resizeLayout() {
             try {
               var viewportHeight = document.compatMode === 'CSS1Compat' ? document.documentElement.clientHeight : document.body.clientHeight;
@@ -437,8 +434,50 @@ function renderChatWindowPage({
                   }
 
                   var input = document.getElementById('prompt-input');
+                  var form = document.getElementById('input-form');
+                  var draftCookieName = 'icq98_draft_${escapeHtml(friendKey)}';
+
+                  // --- Form Submission Logic ---
+                  if (form) {
+                      form.onsubmit = function() {
+                          try {
+                              var submitInput = document.getElementById('prompt-input');
+                              var button = document.getElementById('send-button');
+                              var trimmedValue = submitInput.value.replace(/^\\s+|\\s+$/g, '');
+
+                              if (!submitInput || !trimmedValue || (button && button.disabled)) {
+                                  return false;
+                              }
+
+                              if (button) {
+                                  button.disabled = true;
+                                  button.value = 'Sending...';
+                                  button.className = 'disabled';
+                              }
+                              if (submitInput) {
+                                  submitInput.readOnly = true;
+                                  submitInput.className = 'disabled';
+                              }
+
+                              eraseCookie(draftCookieName);
+                              return true;
+                          } catch (e) {
+                              return true;
+                          }
+                      };
+                  }
+                  
                   if (input && !input.disabled) {
-                    // Clear placeholder text on focus
+                    // --- Draft Persistence Logic ---
+                    var savedDraft = getCookie(draftCookieName);
+                    if (savedDraft) {
+                        input.value = savedDraft;
+                    }
+                    input.onkeyup = function() {
+                        setCookie(draftCookieName, this.value, 1);
+                    };
+
+                    // --- Placeholder Text Logic ---
                     var placeholderText = "${escapeHtml(promptText)}";
                     if (placeholderText && input.value === placeholderText) {
                         input.onfocus = function() { if (this.value === placeholderText) this.value = ''; };
